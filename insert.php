@@ -11,10 +11,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 $dados = json_decode(file_get_contents("php://input"), true);
 
 //Atribui os dados
-    $ativo = $dados['Ativo'];
-    $preco = $dados['Preco'];
-    $tipo = $dados['Tipo'];
-    $recorrencia = $dados['Recorrencia'];
+    $ativo = $dados['ativo_aporte'];
+    $preco = $dados['preco_aporte'];
+    $tipo = $dados['tipo_aporte'];
+    $recorrencia = $dados['recorrencia_aporte'];
 
 try {
     //Comando de insert
@@ -39,6 +39,13 @@ try {
         ]);
     }
 
+} else if($_SERVER["REQUEST_METHOD"] == "GET"){
+
+    $sql = $conexao->prepare("SELECT * from tb_aporte order by id_aporte desc limit 4");
+    $sql->execute();
+    
+    $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(["sucesso" => true, "ativos" => $resposta]);
 } else {
     echo json_encode([
         "sucesso" => false,
