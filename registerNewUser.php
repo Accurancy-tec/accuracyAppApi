@@ -1,6 +1,6 @@
 <?php 
 
-include 'conn.php';
+include 'conexao.php';
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
@@ -12,7 +12,7 @@ $telefone = $dados['telefone_usuario'];
 
 $sql = "INSERT INTO usuarios_info (nome_usuario, email_usuario, senha_usuario, cpf_usuario, telefone_usuario) values (:nome_usuario, :email_usuario, :senha_usuario, :cpf_usuario, :telefone_usuario)";
 
-$stmt = $pdo->prepare($sql);
+$stmt = $conexao->prepare($sql);
 
 $stmt->bindParam(':nome_usuario', $nome);
 $stmt->bindParam(':email_usuario', $email);
