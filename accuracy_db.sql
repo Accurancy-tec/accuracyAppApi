@@ -11,6 +11,15 @@ telefone_usuario varchar(15) not null unique,
 primary key(id_usuario)
 );
 
+create table if not exists tb_aporte(
+id_aporte int unsigned auto_increment,
+ativo_aporte varchar(30) not null,
+preco_aporte numeric(5) not null,
+tipo_aporte varchar(30) not null,
+recorrencia_aporte varchar(30) not null,
+primary key(id_aporte)
+)engine=InnoDB;
+
 drop table usuarios_info;
 
 select * from usuarios_info;

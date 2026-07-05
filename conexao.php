@@ -1,5 +1,5 @@
 <?php
-define ('Banco','Accurancy');
+define ('Banco','accurancy_db');
 define ('Usuario','root');
 define ('Senha','');
 
