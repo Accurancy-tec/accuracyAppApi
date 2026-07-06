@@ -1,6 +1,6 @@
 <?php 
 
-include "conn.php";
+include "conexao.php";
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
@@ -10,7 +10,7 @@ $senha = $dados['senha_usuario'];
 
 $sql = 'SELECT id_usuario, nome_usuario, email_usuario FROM usuarios_info WHERE email_usuario = :email_usuario AND senha_usuario = :senha_usuario';
 
-$stmt = $pdo->prepare($sql);
+$stmt = $conexao->prepare($sql);
 $stmt->bindParam(':email_usuario', $email);
 $stmt->bindParam(':senha_usuario', $senha);
 $stmt->execute();
