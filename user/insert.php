@@ -2,7 +2,7 @@
 //Garante que a resposta vai vim em JSON
 header("Content-Type: application/json; charset=UTF-8");
 //Puxa o banco de dados
-require "../database/conexao.php"; // Caso no android de um erro de 
+require "../database/conexao.php"; // Modifiquei um pouco o caminho pra evitar erro no android studio
 
 //Verifica se o método foi POST
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
