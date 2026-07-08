@@ -1,6 +1,6 @@
 <?php 
 
-include 'conexao.php';
+include '../database/conexao.php';
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
