@@ -2,6 +2,7 @@
 
 require_once 'config/config.php';
 
+
 function buscarAcao($ticker){
     $url = BRAPI_BASE_URL . "/quote/$ticker";
 
@@ -18,5 +19,23 @@ function buscarAcao($ticker){
 
     return $response;
 
+}
+
+function buscarSymbols(){
+    $url = BRAPI_BASE_URL . "/quote/list?limit=100";
+
+    $curl = curl_init($url);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, [
+        "Authorization: Bearer " . BRAPI_TOKEN
+    ]);
+
+    $response = curl_exec($curl);
+    $data = json_decode($response, true);
+
+    $symbols = array_map(fn($s) => $s['stock'], $data['stocks'] ?? []);
+
+    header('Content-Type: application/json');
+    echo json_encode($symbols);
 }
 ?>
