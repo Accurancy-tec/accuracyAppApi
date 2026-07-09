@@ -1,6 +1,6 @@
 <?php 
 
-require_once 'service/BrapiService.php';
+require_once '../service/BrapiService.php';
 
 $ticker = $_GET['ticker'];
 
