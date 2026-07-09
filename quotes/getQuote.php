@@ -7,4 +7,6 @@ $ticker = $_GET['ticker'];
 $reponse = buscarAcao($ticker);
 
 echo $reponse;
+
+buscarSymbols();
 ?>
