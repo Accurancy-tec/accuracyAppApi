@@ -10,10 +10,11 @@ function buscarAcao($ticker){
 
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
 
-    curl_setopt($curl, CURLOPT_HTTPHEADER, [
-    "Authorization: Bearer " . BRAPI_TOKEN,
-    "Accept: application/json"
-   
+    curl_setopt_array($curl, [
+        CURLOPT_HTTPHEADER => [
+            "Authorization: Bearer " . BRAPI_TOKEN,
+            "Accept: application/json"
+        ]
     ]);
 
     $inicio = microtime(true);
@@ -21,7 +22,7 @@ function buscarAcao($ticker){
 
     $fim = microtime(true);
 
-    echo "Tempo CURL: " . ($fim - $inicio);
+    error_log("Tempo CURL: " . ($fim - $inicio));
 
     if($response == false){
         die(curl_error($curl));
