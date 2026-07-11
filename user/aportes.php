@@ -4,9 +4,6 @@ header("Content-Type: application/json; charset=UTF-8");
 //Puxa o banco de dados
 require "../database/conexao.php"; // Modifiquei um pouco o caminho pra evitar erro no android studio
 
-//Verifica se o método foi POST
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
 //Descodifica o JSON
 $dados = json_decode(file_get_contents("php://input"), true);
 
@@ -39,17 +36,9 @@ try {
         ]);
     }
 
-} else if($_SERVER["REQUEST_METHOD"] == "GET"){
 
-    $sql = $conexao->prepare("SELECT * from tb_aporte order by id_aporte limit 4");
-    $sql->execute();
+ 
     
-    $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);
-    echo json_encode(["sucesso" => true, "ativos" => $resposta]);
-} else {
-    echo json_encode([
-        "sucesso" => false,
-        "mensagem" => "Método inválido"
-    ]);
-}
+
+
 ?>
