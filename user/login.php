@@ -16,6 +16,7 @@ $stmt->bindParam(':senha_usuario', $senha);
 $stmt->execute();
 
 $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+$token = criarToken($usuario['id_usuario']);
 
 if($usuario){
     $id = $usuario['id_usuario'];
