@@ -1,12 +1,11 @@
 <?php
-require "vendor/autoload.php";
-require_once "config/config.php";
+require_once __DIR__ . "/../vendor/autoload.php";
+require_once __DIR__ . "/../config/config.php";
 
 use Firebase\JWT\JWT;
 
-function criarToken($idUsuario)
-{
-$secretKey = getenv(secretKey);
+function criarToken($idUsuario){
+
 
 $payload =[
     "iss" => "accuracy-mob-api",
@@ -15,8 +14,7 @@ $payload =[
     "sub" => $idUsuario
 ];
 
-$token = JWT::encode($payload,$secretKey,'HS256');
+return JWT::encode($payload,secretKey,'HS256');
 
-echo json_encode(['token' => $token]);
 }
 ?>
