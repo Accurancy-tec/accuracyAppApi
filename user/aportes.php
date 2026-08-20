@@ -15,7 +15,7 @@ $dados = json_decode(file_get_contents("php://input"), true);
 
 try {
 
-    $sql = "INSERT INTO tb_aporte (ativo_aporte, preco_aporte, tipo_aporte, recorrencia_aporte,id_usuario) VALUES (?, ?, ?, ?)";
+    $sql = "INSERT INTO tb_aporte (ativo_aporte, preco_aporte, tipo_aporte, recorrencia_aporte,id_usuario) VALUES (?, ?, ?, ?,?)";
         $insert = $conexao->prepare($sql);
         $insert->bindParam(1, $ativo);
         $insert->bindParam(2, $preco);
