@@ -1,6 +1,5 @@
 <?php
 
-require_once __DIR__ . "/../config/config.php";
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Firebase\JWT\JWT;
@@ -17,7 +16,7 @@ function autenticar(){
     }
 
     try{
-        $decoded = JWT::decode($matches[1], new Key(secretKey,'HS256'));
+        $decoded = JWT::decode($matches[1], new Key(getenv("secretkey"),'HS256'));
         return $decoded->sub;
     }
     catch(Exception $ex){
