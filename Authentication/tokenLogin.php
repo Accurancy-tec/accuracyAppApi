@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . "/../vendor/autoload.php";
-require_once __DIR__ . "/../config/config.php";
 
 use Firebase\JWT\JWT;
 
@@ -14,7 +13,7 @@ $payload =[
     "sub" => $idUsuario
 ];
 
-return JWT::encode($payload,secretKey,'HS256');
+return JWT::encode($payload,getenv("secretkey"),'HS256');
 
 }
 ?>
