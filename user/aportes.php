@@ -2,7 +2,7 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
-include "Authentication.php";
+include "../Authentication/Authentication.php";
 
 
 $dados = json_decode(file_get_contents("php://input"), true);
@@ -11,7 +11,7 @@ $dados = json_decode(file_get_contents("php://input"), true);
     $preco = $dados['preco_aporte'];
     $tipo = $dados['tipo_aporte'];
     $recorrencia = $dados['recorrencia_aporte'];
-    $id = autenticar();
+    $id = autenticar(); 
 
 try {
 
