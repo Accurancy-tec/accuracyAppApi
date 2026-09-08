@@ -5,8 +5,11 @@ include "../database/conexao.php";
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
-$email = $dados['email_usuario'];
-$senha = $dados['senha_usuario'];
+/*$email = $dados['email_usuario'];
+$senha = $dados['senha_usuario'];*/
+
+$email = "klebinho@gmail.com";
+$senha = 123;
 
 $sql = 'SELECT id_usuario, nome_usuario, email_usuario FROM usuarios_info WHERE email_usuario = :email_usuario AND senha_usuario = :senha_usuario';
 
