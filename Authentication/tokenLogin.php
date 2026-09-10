@@ -13,7 +13,7 @@ $payload =[
     "sub" => $idUsuario
 ];
 
-return JWT::encode($payload,getenv("secretkey"),'HS256');
+return JWT::encode($payload,getenv("SECRET_KEY"),'HS256');
 
 }
 ?>
