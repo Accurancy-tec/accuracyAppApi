@@ -16,7 +16,7 @@ function autenticar(){
     }
 
     try{
-        $decoded = JWT::decode($matches[1], new Key(getenv("secretkey"),'HS256'));
+        $decoded = JWT::decode($matches[1], new Key(getenv("SECRET_KEY"),'HS256'));
         return $decoded->sub;
     }
     catch(Exception $ex){

@@ -1,10 +1,13 @@
 <?php
-require "../database/conexao.php";
+
 header("Content-Type: application/json; charset=UTF-8");
-$dados = json_decode(file_get_contents("php://input"), true);
 
+require_once __DIR__ . "/../Authentication/Authentication.php";
+require "../database/conexao.php";
 
-   $sql = $conexao->prepare("SELECT * from tb_aporte");
+$id = autenticar();
+   $sql = $conexao->prepare("SELECT * from tb_aporte where id_usuario = ? order by id_aporte limit 4");
+    $sql->bindParam(1, $id);
     $sql->execute();
 
     $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);

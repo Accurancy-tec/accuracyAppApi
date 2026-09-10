@@ -19,6 +19,7 @@ $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($usuario) {
     $token = criarToken($usuario['id_usuario']);
+
     $id = $usuario['id_usuario'];
     $nome = $usuario['nome_usuario'];
     $email = $usuario['email_usuario'];
