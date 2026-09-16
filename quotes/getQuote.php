@@ -16,6 +16,4 @@ if(empty($ticker)){
 $reponse = buscarAcao($ticker);
 
 echo $reponse;
-
-buscarSymbols();
 ?>
