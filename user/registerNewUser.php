@@ -10,7 +10,7 @@ $senha = $dados['senha_usuario'];
 $cpf = $dados['cpf_usuario'];
 $telefone = $dados['telefone_usuario'];
 
-$sql = "INSERT INTO usuarios_info (nome_usuario, email_usuario, senha_usuario, cpf_usuario, telefone_usuario) values (:nome_usuario, :email_usuario, :senha_usuario, :cpf_usuario, :telefone_usuario)";
+$sql = "INSERT INTO usuario (nome_usuario, email_usuario, senha_usuario, cpf_usuario, telefone_usuario) values (:nome_usuario, :email_usuario, :senha_usuario, :cpf_usuario, :telefone_usuario)";
 
 $stmt = $conexao->prepare($sql);
 
