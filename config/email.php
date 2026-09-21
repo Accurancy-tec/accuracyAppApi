@@ -46,11 +46,7 @@ function enviarCodigo($email, $codigo)
         $mail->send();
 
         return true;
-
     } catch (Exception $erro) {
-
-        echo "Erro do PHPMailer: " . $mail->ErrorInfo;
-
         return false;
     }
 }

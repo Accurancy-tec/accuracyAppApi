@@ -34,15 +34,7 @@ if (empty($email) || empty($senha)) {
     exit;
 }
 
-$sql = "
-    SELECT
-        id_usuario,
-        nome_usuario,
-        email_usuario,
-        senha_usuario
-    FROM usuario
-    WHERE email_usuario = :email_usuario
-";
+$sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
 
 $stmt = $conexao->prepare($sql);
 $stmt->bindParam(":email_usuario", $email);
@@ -58,10 +50,17 @@ if (!$usuario) {
     exit;
 }
 
-if ($senha !== $usuario["senha_usuario"]) {
+if (!password_verify($senha, $usuario["senha_usuario"])) {
     echo json_encode([
         "success" => false,
         "message" => "Email ou senha incorretos"
+    ]);
+    exit;
+}
+if (!$usuario["email_verificado_usuario"]) {
+    echo json_encode([
+        "success" => false,
+        "message" => "E-mail ainda não foi verificado."
     ]);
     exit;
 }
