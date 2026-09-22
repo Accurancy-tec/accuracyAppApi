@@ -6,7 +6,7 @@ require_once __DIR__ . "/../Authentication/Authentication.php";
 
 $id = autenticar();
 
-    $sql = $conexao->prepare("SELECT * from aporte where id_usuario = ? order by id_aporte limit 4");
+    $sql = $conexao->prepare("SELECT * from aporte where id_carteira = ? order by id_aporte limit 4");
     $sql->bindParam(1,$id);
 
     $sql->execute();
