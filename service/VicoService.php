@@ -6,7 +6,7 @@ require_once __DIR__ . "/../Authentication/Authentication.php";
 require "../database/conexao.php";
 
 $id = autenticar();
-   $sql = $conexao->prepare("SELECT * from tb_aporte where id_usuario = ? order by id_aporte limit 4");
+   $sql = $conexao->prepare("SELECT * from aporte where id_carteira = ? order by id_aporte limit 4");
     $sql->bindParam(1, $id);
     $sql->execute();
 
@@ -16,8 +16,8 @@ $dados = [];
 
 foreach($resposta as $row){
     $dados[] = [
-        "ativo_aporte" => $row["ativo_aporte"],
-        "preco_aporte" => (float)$row["preco_aporte"]
+        "id_ativo" => $row["id_ativo"],
+        "valor_aporte" => (float)$row["valor_aporte"]
     ];
 }
 

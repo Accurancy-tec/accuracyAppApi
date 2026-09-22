@@ -6,23 +6,13 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Dotenv\Dotenv;
 
-
-// Carrega o .env
-$dotenv = Dotenv::createImmutable(__DIR__ . "/..");
-$dotenv->load();
-
 function criarToken($idUsuario)
 {
     $payload = [
-
         "iss" => "accuracy-mob-api",
-
         "iat" => time(),
-
         "exp" => time() + (60 * 120),
-
         "sub" => $idUsuario
-
     ];
 
     return JWT::encode(
