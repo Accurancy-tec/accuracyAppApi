@@ -5,7 +5,6 @@ use Firebase\JWT\JWT;
 
 function criarToken($idUsuario){
 
-
 $payload =[
     "iss" => "accuracy-mob-api",
     "iat" => time(),
