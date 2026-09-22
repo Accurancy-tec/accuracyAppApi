@@ -2,6 +2,8 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
+require "../config/cors.php";
+require_once "../service/PosicaoService.php";
 
 
 $dados = json_decode(file_get_contents("php://input"), true);
@@ -18,7 +20,8 @@ $dados = json_decode(file_get_contents("php://input"), true);
 
 try {
 
-    $sql = "INSERT INTO aporte (id_carteira, id_ativo, tipo_aporte,quantidade_aporte,valor_aporte,recorrencia_aporte,status_aporte,observacao_aporte,data_aporte) VALUES (?, ?, ?, ?,?,?,?,?,?)";
+    $sql = "INSERT INTO aporte (id_carteira, id_ativo, tipo_aporte,quantidade_aporte,valor_aporte,recorrencia_aporte,status_aporte,observacao_aporte,data_aporte) 
+    VALUES (?, ?, ?, ?,?,?,?,?,?)";
         $insert = $conexao->prepare($sql);
         $insert->bindParam(1, $idWallet);
         $insert->bindParam(2, $idActive);
@@ -30,6 +33,15 @@ try {
         $insert->bindParam(8,$contributionNotes);
         $insert->bindParam(9,$contributionDate);
         $insert->execute();
+
+        $posicaoAtualizada = atualizarPosicao($conexao, $idWallet, $idActive, $typeContribution, $contributionQuantity, $contributionAmount);
+
+        if(!$posicaoAtualizada) {
+            throw new Exception("Quantidade Insuficiente para venda. A operação não pode ser concluída.");
+          
+         
+        }
+        $conexao->commit();
 
         echo json_encode([
             "sucesso" => true,
