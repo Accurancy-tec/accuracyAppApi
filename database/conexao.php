@@ -2,23 +2,33 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Dotenv\Dotenv;
+
+$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv->load();
+
 try {
 
-    $dsn = "pgsql:host=" . getenv("DB_HOST") .
-           ";port=" . getenv("DB_PORT") .
-           ";dbname=" . getenv("DB_NAME");
+    $dsn = "pgsql:host=" . $_ENV["DB_HOST"] .
+           ";port=" . $_ENV["DB_PORT"] .
+           ";dbname=" . $_ENV["DB_NAME"];
 
-    $conexao = new PDO($dsn, getenv("DB_USER"), getenv("DB_PASSWORD"));
+    $conexao = new PDO(
+        $dsn,
+        $_ENV["DB_USER"],
+        $_ENV["DB_PASSWORD"]
+    );
 
-    $conexao->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION
+    $conexao->setAttribute(
+        PDO::ATTR_ERRMODE,
+        PDO::ERRMODE_EXCEPTION
     );
 
 } catch (PDOException $erro) {
 
     echo json_encode([
         "success" => false,
-        "message" => "Erro de conexão com o banco",
-        "error" => $erro->getMessage()
+        "message" => "Erro de conexão com o banco"
     ]);
 
     exit;
