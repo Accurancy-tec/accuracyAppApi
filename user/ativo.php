@@ -2,6 +2,11 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
+require "../config/cors.php";
+require_once "../Authentication/Authentication.php";
+require_once "../service/AtivoService.php";
+
+autenticar();
 
 
 $dados = json_decode(file_get_contents("php://input"), true);
@@ -12,12 +17,7 @@ $dados = json_decode(file_get_contents("php://input"), true);
 
 try {
 
-    $sql = "INSERT INTO ativo (simbolo_ativo, nome_ativo, categoria_ativo) VALUES (?, ?, ?)";
-        $insert = $conexao->prepare($sql);
-        $insert->bindParam(1, $simboloAtivo);
-        $insert->bindParam(2, $nomeAtivo);
-        $insert->bindParam(3, $categoriaAtivo);
-        $insert->execute();
+    $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
 
         echo json_encode([
             "sucesso" => true,

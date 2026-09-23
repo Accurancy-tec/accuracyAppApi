@@ -2,28 +2,29 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
+require "../config/cors.php";
+require_once "../Authentication/Authentication.php";
+require_once "../service/PosicaoService.php";
 
-$dados = json_decode(file_get_contents("php://input"), true);
+autenticar();
 
-    $idWallet = $dados['id_carteira'];
-    $idActive = $dados['id_ativo'];
-    $itemQuantity = $dados['quantidade_item'];
-    $averageItemPrice = $dados['preco_medio_item'];
-    
+$idCarteira = $_GET['id_carteira'] ?? null;
+
+if (!$idCarteira) {
+    echo json_encode([
+        "sucesso" => false,
+        "mensagem" => "ID da carteira não fornecido."
+    ]);
+    exit;
+}
 
 try {
 
-    $sql = "INSERT INTO item_investimento (idWallet, idActive, itemQuantity,averageItemPrice) VALUES (?, ?, ?,?)";
-        $insert = $conexao->prepare($sql);
-        $insert->bindParam(1, $idWallet);
-        $insert->bindParam(2, $idActive);
-        $insert->bindParam(3, $itemQuantity);
-        $insert->bindParam(4, $averageItemPrice);
-        $insert->execute();
+    $posicoes = buscarPosicoes($conexao, $idCarteira);
 
         echo json_encode([
             "sucesso" => true,
-            "mensagem" => "Item cadastrado com sucesso"
+            "posicoes" => $posicoes
         ]);
 
 } catch (PDOException $erro) {
