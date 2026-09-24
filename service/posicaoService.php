@@ -44,8 +44,8 @@ function atualizarPosicao(PDO $conexao, $idCarteira, $idAtivo, $tipoAporte, $qua
 }
 
 
- // traz símbolo e nome do ativo.
- 
+// traz símbolo e nome do ativo.
+
 function buscarPosicoes(PDO $conexao, $idCarteira)
 {
     $sql = "SELECT i.id_carteira, i.id_ativo, a.simbolo_ativo, a.nome_ativo,
