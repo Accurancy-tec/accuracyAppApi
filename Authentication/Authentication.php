@@ -40,7 +40,7 @@ function autenticar()
         http_response_code(401);
 
         echo json_encode([
-            "erro" => "Token inválido ou expirado"
+            "erro" => "Token inválido ou expirado","detalhe" => $ex->getMessage()
         ]);
 
         exit;
