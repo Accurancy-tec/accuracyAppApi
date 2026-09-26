@@ -1,0 +1,53 @@
+name: CI - API PHP
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-api-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Verificação da API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_pgsql, mbstring
+          tools: composer:v2
+          coverage: none
+
+      - name: Composer
+        run: composer --version
+
+      - name: Validar composer.json
+        run: composer validate --no-check-publish
+
+      - name: Instalar dependências
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Verificar sintaxe PHP
+        run: |
+          find . \
+            -path ./vendor -prune \
+            -o -name '*.php' -print0 |
+            xargs -0 -n1 php -l
+
+      - name: Docker build
+        run: docker build -t accuracy-api:ci .
