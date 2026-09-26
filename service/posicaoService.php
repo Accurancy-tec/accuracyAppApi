@@ -4,7 +4,7 @@
  
 function atualizarPosicao(PDO $conexao, $idCarteira, $idAtivo, $tipoAporte, $quantidade, $valorTotal)
 {
-    if ($tipoAporte === 'compra') {
+    if ($tipoAporte === 'Compra') {
 
         $precoUnitario = $quantidade > 0 ? $valorTotal / $quantidade : 0;
 
