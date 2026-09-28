@@ -1,14 +1,13 @@
-<?php
+<?php 
+header('Content-Type: application/json; charset=utf-8');
 
-header("Content-Type: application/json; charset=UTF-8");
-
-require_once __DIR__ . "/../Authentication/Authentication.php";
 require_once __DIR__ . "/../database/conexao.php";
+require_once __DIR__ . "/../Authentication/Authentication.php";
 
-
+// Esse arquivo faz a mesma requisição que o dashboard.php, apenas separei as reponsabilidades e também estava usando pra testar a carteira
 try {
-    $id_usuario = autenticar(); 
 
+    $id_usuario = autenticar();
     $sql = $conexao->prepare("
         SELECT
             a.id_aporte,
@@ -20,8 +19,10 @@ try {
             a.tipo_aporte,
             a.recorrencia_aporte
         FROM Aporte a
-        INNER JOIN Carteira c ON c.id_carteira = a.id_carteira
-        INNER JOIN Ativo at ON at.id_ativo = a.id_ativo
+        INNER JOIN Carteira c
+            ON c.id_carteira = a.id_carteira
+        INNER JOIN Ativo at
+            ON at.id_ativo = a.id_ativo
         WHERE c.id_usuario = ?
         ORDER BY a.id_aporte DESC
         LIMIT 4
@@ -29,17 +30,21 @@ try {
 
     $sql->execute([$id_usuario]);
 
-    $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);
+    $resultado = $sql->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode([
         "sucesso" => true,
-        "ativos" => $resposta
+        "quantidade" => count($resultado),
+        "ativos" => $resultado
     ]);
 
 } catch (PDOException $e) {
 
+    http_response_code(500);
+
     echo json_encode([
         "sucesso" => false,
-        "mensagem" => "Erro ao buscar aportes: " . $e->getMessage()
+        "mensagem" => $e->getMessage()
     ]);
 }
+?>

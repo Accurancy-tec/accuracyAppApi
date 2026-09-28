@@ -17,7 +17,7 @@ $dados = json_decode(file_get_contents("php://input"), true);
     $contributionAmount = $dados['valor_aporte'] ?? null;
     $contributionRecurrence = $dados['recorrencia_aporte'];
     $contributionNotes = $dados['observacao_aporte'] ?? null;
-    $contributionDate = date("Y-m-d");;
+    $contributionDate = date("Y-m-d");
 
 try {
     $conexao->beginTransaction();
