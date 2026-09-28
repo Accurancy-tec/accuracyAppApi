@@ -6,13 +6,14 @@ require_once __DIR__ . "/../Authentication/Authentication.php";
 require_once __DIR__ . "/../database/conexao.php";
 
 
-<<<<<<< HEAD
-    $sql = $conexao->prepare("SELECT * from aporte where id_usuario = ? order by id_aporte limit 4");
-    $sql->bindParam(1,$id);
-=======
 try {
     $id_usuario = autenticar();
->>>>>>> feec4a7a48048cbfbbd5a0f980ec57b82e85c37c
+
+    json_encode([
+        "id_usuario" => $id_usuario
+    ]);
+
+    exit;
 
     $sql = $conexao->prepare("
         SELECT
