@@ -4,8 +4,10 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . "/../database/conexao.php";
 require_once __DIR__ . "/../Authentication/Authentication.php";
 
+// Esse arquivo faz a mesma requisição que o dashboard.php, apenas separei as reponsabilidades e também estava usando pra testar a carteira
 try {
 
+    $id_usuario = autenticar();
     $sql = $conexao->prepare("
         SELECT
             a.id_aporte,
@@ -26,9 +28,6 @@ try {
         LIMIT 4
     ");
 
-    // COLOQUE AQUI UM ID DE USUÁRIO QUE REALMENTE TENHA APORTES
-    $id_usuario = 1;
-
     $sql->execute([$id_usuario]);
 
     $resultado = $sql->fetchAll(PDO::FETCH_ASSOC);
@@ -36,7 +35,6 @@ try {
     echo json_encode([
         "sucesso" => true,
         "quantidade" => count($resultado),
-        "token" => $id_usuario,
         "ativos" => $resultado
     ]);
 
