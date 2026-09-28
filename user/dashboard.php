@@ -7,7 +7,7 @@ require_once __DIR__ . "/../database/conexao.php";
 
 
 try {
-    $id_usuario = autenticar();
+    $id_usuario = autenticar(); 
 
     $sql = $conexao->prepare("
         SELECT
