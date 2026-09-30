@@ -2,8 +2,8 @@
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once __DIR__ . "/../Authentication/tokenLogin.php";
-require_once __DIR__ . "/../database/conexao.php";
+require_once __DIR__ . "/../../Authentication/tokenLogin.php";
+require_once __DIR__ . "/../../database/conexao.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     echo json_encode([
@@ -74,12 +74,37 @@ if ($senha !== $usuario["senha_usuario"]) {
     exit;
 }*/
 
-$token = criarToken($usuario["id_usuario"]);
+$accessToken = criarToken(
+    $usuario["id_usuario"]
+);
+
+$refreshToken = criarRefreshToken();
+
+$refreshTokenHash = criarHashRefreshToken($refreshToken);
+
+$expiraEm = date(
+    "Y-m-d H:i:s",
+    time() + (60 * 60 * 24 * 30)
+);
+
+
+$sqlSessao = "INSERT INTO Sessao_Usuario (id_usuario,refresh_token_hash,dispositivo_sessao,expira_em) VALUES 
+(:id_usuario,:refresh_token_hash,:dispositivo_sessao,:expira_em)";
+
+$stmtSessao = $conexao->prepare($sqlSessao);
+
+$stmtSessao->bindParam(":id_usuario", $usuario["id_usuario"],);
+$stmtSessao->bindParam(":refresh_token_hash",$refreshTokenHash);
+$stmtSessao->bindValue(":dispositivo_sessao","Android Accuracy");
+$stmtSessao->bindParam(":expira_em",$expiraEm);
+
+$stmtSessao->execute();
 
 echo json_encode([
     "success" => true,
     "message" => "Login realizado com sucesso",
-    "token" => $token,
+    "token" => $accessToken,
+    "refreshToken" => $refreshToken,
     "user" => [
         "id_usuario" => $usuario["id_usuario"],
         "nome_usuario" => $usuario["nome_usuario"],
