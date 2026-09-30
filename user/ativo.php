@@ -1,8 +1,8 @@
 <?php
+require "../config/cors.php";
 header("Content-Type: application/json; charset=UTF-8");
  
 require "../database/conexao.php";
-require "../config/cors.php";
 require_once "../Authentication/Authentication.php";
 require_once "../service/ativoService.php";
 require_once "../service/cotacaoService.php";
