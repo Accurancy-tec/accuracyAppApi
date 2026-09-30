@@ -1,4 +1,5 @@
 <?php
+require "../config/cors.php";
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
