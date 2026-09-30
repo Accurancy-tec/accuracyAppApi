@@ -11,7 +11,7 @@ function criarToken($idUsuario)
     $payload = [
         "iss" => "accuracy-mob-api",
         "iat" => time(),
-        "exp" => time() + (60 * 120),
+        "exp" => time() + (60 * 15),
         "sub" => $idUsuario
     ];
 
@@ -44,4 +44,14 @@ function validarToken($token)
         return false;
 
     }
+}
+
+function criarRefreshToken()
+{
+    return bin2hex(random_bytes(64));
+}
+
+function criarHashRefreshToken($refreshToken)
+{
+    return hash("sha256", $refreshToken);
 }
