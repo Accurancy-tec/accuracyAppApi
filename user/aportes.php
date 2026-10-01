@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . "/../config/cors.php";
+
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
-require "../config/cors.php";
 require_once "../service/posicaoService.php";
 require_once "../service/ativoService.php";
 

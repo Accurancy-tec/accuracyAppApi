@@ -1,5 +1,5 @@
 <?php
-
+require_once __DIR__ . "/../config/cors.php";
 require_once '../database/conexao.php';
 require_once '../config/email.php';
 
