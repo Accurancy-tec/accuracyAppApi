@@ -3,8 +3,8 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . "/../service/ativoService.php";
-require_once __DIR__ . "/../service/posicaoService.php";
+require_once __DIR__ . "/../src/Services/ativoService.php";
+require_once __DIR__ . "/../src/Services/posicaoService.php";
 require_once __DIR__ . "/../service/carteiraService.php";
 
 final class PosicaoServiceTest extends TestCase
@@ -30,7 +30,7 @@ final class PosicaoServiceTest extends TestCase
             "Ações"
         );
 
-        $this->idCarteira = criarCarteira(
+        $this->idCarteira = criarCarteiraService(
             $this->conexao,
             1,
             'TIME_' . time(),

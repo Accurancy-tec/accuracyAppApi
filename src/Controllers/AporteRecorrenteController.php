@@ -4,8 +4,8 @@ header("Content-Type: application/json; charset=UTF-8");
 
 require_once "../config/cors.php";
 require_once "../database/conexao.php";
-require_once "../Authentication/Authentication.php";
-require_once "../service/aporteRecorrenteService.php";
+require_once "../accuracyApi/src/Middleware/Authentication.php";
+require_once "../accuracyApi/src/Repositories/AporteRepository.php";
 
 try {
 

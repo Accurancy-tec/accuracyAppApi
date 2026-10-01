@@ -2,10 +2,10 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
-include "../Authentication/Authentication.php";
+include "../accuracyApi/src/Middleware/Authentication.php";
 require "../config/cors.php";
-require_once "../Authentication/Authentication.php";
-require_once "../service/CarteiraService.php";
+require_once "../accuracyApi/src/Middleware/Authentication.php";
+require_once "../accuracyApi/src/Services/carteiraService.php";
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
@@ -17,7 +17,7 @@ $dados = json_decode(file_get_contents("php://input"), true);
 
 try {
 
-    $idCarteira = criarCarteira($conexao, $idUser, $nameWallet, $typeWallet, $availableWalletBalance);
+    $idCarteira = criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $availableWalletBalance);
 
         echo json_encode([
             "sucesso" => true,
