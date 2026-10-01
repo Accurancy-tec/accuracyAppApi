@@ -1,7 +1,7 @@
 <?php
 
-require_once __DIR__ . "/cotacaoService.php";
-require_once __DIR__ . "/posicaoService.php";
+require_once __DIR__ . "/../src/Services/cotacaoService.php";
+require_once __DIR__ . "/../src/Services/posicaoService.php";
 
 
 // Calcula a próxima data de execução do aporte recorrente
@@ -82,7 +82,7 @@ function executarAportesRecorrentes(PDO $conexao)
 
 
             // Busca a cotação mais recente do ativo
-            $cotacao = buscarUltimaCotacao(
+            $cotacao = buscarUltimaCotacaoService(
                 $conexao,
                 $idAtivo
             );

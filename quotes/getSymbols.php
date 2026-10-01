@@ -1,6 +1,6 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
-require_once '../service/BrapiService.php';
+require_once '../accuracyApi/src/Services/BrapiService.php';
 
 try{
     $reponse = buscarSymbols();

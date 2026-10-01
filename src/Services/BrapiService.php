@@ -59,4 +59,3 @@ if ($response === false) {
 
     return $response;
 }
-?>

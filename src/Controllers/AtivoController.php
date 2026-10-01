@@ -3,9 +3,9 @@ header("Content-Type: application/json; charset=UTF-8");
  
 require "../database/conexao.php";
 require "../config/cors.php";
-require_once "../Authentication/Authentication.php";
-require_once "../service/ativoService.php";
-require_once "../service/cotacaoService.php";
+require_once "../accuracyApi/src/Middleware/Authentication.php";
+require_once "../accuracyApi/src/Services/ativoService.php";
+require_once "../accuracyApi/src/Services/cotacaoService.php";
  
 autenticar();
  
@@ -32,7 +32,7 @@ try {
         }
  
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
-        salvarCotacao($conexao, $idAtivo, $dataCotacao, $precoAtivo);
+        salvarCotacaoService($conexao, $idAtivo, $dataCotacao, $precoAtivo);
  
         echo json_encode([
             "sucesso" => true,
@@ -44,18 +44,7 @@ try {
  
     if ($acao === "listar") {
  
-        $sql = $conexao->prepare(
-            "SELECT id_ativo, simbolo_ativo, nome_ativo, categoria_ativo, cotacao_automatica_ativo
-             FROM ativo
-             ORDER BY nome_ativo ASC"
-        );
-        $sql->execute();
- 
-        $ativos = $sql->fetchAll(PDO::FETCH_ASSOC);
- 
-        foreach ($ativos as &$ativo) {
-            $ativo["ultima_cotacao"] = buscarUltimaCotacao($conexao, $ativo["id_ativo"]);
-        }
+        $ativos = listarAtivoService($conexao);
  
         echo json_encode([
             "sucesso" => true,

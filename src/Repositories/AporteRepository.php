@@ -1,5 +1,4 @@
 <?php
- 
 // Confere se a carteira pertence mesmo ao usuário autenticado,
 // pra ninguém criar aporte recorrente em carteira de outra pessoa
 function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
@@ -10,7 +9,35 @@ function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
  
     return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
 }
- 
+
+function cadastrarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte){
+
+    $sql = $conexao->prepare("INSERT INTO aporte (
+    id_carteira, 
+    id_ativo, 
+    tipo_aporte,
+    quantidade_aporte,
+    valor_aporte,
+    recorrencia_aporte,
+    observacao_aporte,
+    data_aporte) 
+    VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)"
+    ); 
+
+    $sql->execute([
+        ':id_aporte' => $id_carteira,
+        ':id_ativo' => $id_ativo,
+        ':tipo_aporte' => $tipo_aporte,
+        ':quantidade_aporte' => $quantidade_aporte,
+        ':valor_aporte' => $valor_aporte,
+        ':recorrencia_aporte' => $recorrencia_aporte,
+        ':obs_aporte' => $obs_aporte,
+        ':data_aporte' => $data_aporte
+    ]);
+
+    return $sql->fetchAll(PDO::FETCH_ASSOC);
+   
+}
 // Cria um novo aporte recorrente pra uma carteira/ativo
 function criarAporteRecorrente(PDO $conexao, $idCarteira, $idAtivo, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $proximaExecucaoRecorrente)
 {
@@ -72,4 +99,29 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
  
     return $stmt->rowCount() > 0;
 }
- 
+
+function listarAportesUsuario(PDO $conexao, $id_usuario){
+    $sql = $conexao->prepare("
+        SELECT
+            a.id_aporte,
+            at.simbolo_ativo AS ativo_aporte,
+            at.nome_ativo AS name_ativo,
+            at.categoria_ativo AS categoria_ativo,
+            a.quantidade_aporte,
+            a.valor_aporte,
+            a.tipo_aporte,
+            a.recorrencia_aporte
+        FROM Aporte a
+        INNER JOIN Carteira c ON c.id_carteira = a.id_carteira
+        INNER JOIN Ativo at ON at.id_ativo = a.id_ativo
+        WHERE c.id_usuario = ?
+        ORDER BY a.id_aporte DESC
+        LIMIT 4
+    ");
+
+    $sql->execute([$id_usuario]);
+
+    return $sql->fetchAll(PDO::FETCH_ASSOC);
+
+    
+}
