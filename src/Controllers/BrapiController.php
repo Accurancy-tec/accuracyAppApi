@@ -1,6 +1,7 @@
-<?php 
+<?php
 
-function buscarAcao(String $ticker){
+function buscarAcao(String $ticker)
+{
     $url = getenv("BRAPI_BASE_URL") . "/v2/stocks/quote?symbols=" . urlencode($ticker);
 
     $curl = curl_init($url);
@@ -21,17 +22,17 @@ function buscarAcao(String $ticker){
 
     error_log("Tempo CURL: " . ($fim - $inicio));
 
-    if($response == false){
+    if ($response == false) {
         die(curl_error($curl));
     }
 
     return $response;
-
 }
 
-function buscarSymbols(){
+function buscarSymbols()
+{
 
-     $url = getenv("BRAPI_BASE_URL") . "/v2/tickers";
+    $url = getenv("BRAPI_BASE_URL") . "/v2/tickers";
 
     $curl = curl_init($url);
 
@@ -46,16 +47,50 @@ function buscarSymbols(){
 
     $inicio = microtime(true);
     $response = curl_exec($curl);
-if ($response === false) {
-    die("Erro CURL: " . curl_errno($curl) . " - " . curl_error($curl));
-}
+    if ($response === false) {
+        die("Erro CURL: " . curl_errno($curl) . " - " . curl_error($curl));
+    }
     $fim = microtime(true);
 
     error_log("Tempo CURL: " . ($fim - $inicio));
 
-    if($response == false){
+    if ($response == false) {
         die(curl_error($curl));
     }
 
     return $response;
+}
+
+function getQuote()
+{
+    $ticker = $_GET['symbol'];
+
+
+    if (empty($ticker)) {
+        echo json_encode([
+            "success" => false,
+            "message" => "Ticker não informado"
+        ]);
+        exit();
+    }
+
+    $reponse = buscarAcao($ticker);
+
+    echo $reponse;
+}
+
+function getSymbols()
+{
+    header("Content-Type: application/json; charset=UTF-8");
+
+    try {
+        $reponse = buscarSymbols();
+        echo $reponse;
+    } catch (Exception $e) {
+        echo json_encode([
+            "success" => false,
+            "message" => $e->getMessage()
+        ]);
+        exit();
+    }
 }
