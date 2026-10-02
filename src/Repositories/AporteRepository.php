@@ -1,16 +1,7 @@
 <?php
 // Confere se a carteira pertence mesmo ao usuário autenticado,
 // pra ninguém criar aporte recorrente em carteira de outra pessoa
-function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
-{
-    $sql = "SELECT id_carteira FROM carteira WHERE id_carteira = ? AND id_usuario = ?";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$idCarteira, $idUsuario]);
- 
-    return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
-}
-
-function cadastrarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte){
+function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte){
 
     $sql = $conexao->prepare("INSERT INTO aporte (
     id_carteira, 
@@ -124,4 +115,50 @@ function listarAportesUsuario(PDO $conexao, $id_usuario){
     return $sql->fetchAll(PDO::FETCH_ASSOC);
 
     
+}
+
+function getIdAporteRecorrente(PDO $conexao, $idAporteRecorrente){
+    $sql = "SELECT id_carteira FROM aporte_recorrente WHERE id_aporte_recorrente = ? ";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$idAporteRecorrente]);
+
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getAportesRecorrentes(PDO $conexao){
+    $sql = "
+        SELECT
+            id_aporte_recorrente,
+            id_carteira,
+            id_ativo,
+            valor_recorrente,
+            frequencia_recorrente,
+            proxima_execucao_recorrente
+        FROM aporte_recorrente
+        WHERE ativo_flag_recorrente = TRUE
+         AND proxima_execucao_recorrente <= CURRENT_DATE
+        ORDER BY proxima_execucao_recorrente
+    ";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorrente){
+    
+    // Atualiza o aporte recorrente
+    $sqlUpdate = "UPDATE aporte_recorrente SET proxima_execucao_recorrente = :proxima WHERE id_aporte_recorrente = :id";
+
+    $update = $conexao->prepare($sqlUpdate);
+
+    $update->execute([
+        ":proxima" => $proximaExecucao,
+        ":id" => $idAporteRecorrente
+    ]);
+
+    return $update;
+
 }

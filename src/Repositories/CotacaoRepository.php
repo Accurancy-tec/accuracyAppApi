@@ -29,7 +29,7 @@
         return $nova["id_cotacao"];
     }
 
-    function buscarUltimaCotacao(PDO $conexao, $idAtivo){
+    function getUltimaCotacao(PDO $conexao, $idAtivo){
         $sql = $conexao->prepare(
             "SELECT data_cotacao, preco_fechamento_cotacao
             FROM cotacao_ativo

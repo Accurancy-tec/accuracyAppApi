@@ -4,8 +4,8 @@ header("Content-Type: application/json; charset=UTF-8");
 require "../database/conexao.php";
 require "../config/cors.php";
 require_once "../accuracyApi/src/Middleware/Authentication.php";
-require_once "../accuracyApi/src/Services/ativoService.php";
-require_once "../accuracyApi/src/Services/cotacaoService.php";
+require_once "../accuracyApi/src/Services/AtivoService.php";
+require_once "../accuracyApi/src/Services/CotacaoService.php";
  
 autenticar();
  

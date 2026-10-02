@@ -1,6 +1,6 @@
 <?php 
 
-function buscarAcao($ticker){
+function buscarAcao(String $ticker){
     $url = getenv("BRAPI_BASE_URL") . "/v2/stocks/quote?symbols=" . urlencode($ticker);
 
     $curl = curl_init($url);
