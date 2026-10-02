@@ -47,7 +47,7 @@ function autenticar()
     }
 }
 
-function criarToken(int $idUsuario)
+function criarToken($idUsuario)
 {
     $payload = [
         "iss" => "accuracy-mob-api",
@@ -63,7 +63,7 @@ function criarToken(int $idUsuario)
     );
 }
 
-function validarToken(String $token)
+function validarToken($token)
 {
     try {
 

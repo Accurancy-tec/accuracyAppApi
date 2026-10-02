@@ -8,6 +8,7 @@ require_once "../accuracyApi/src/Service/AtivoService.php";
 require_once "../accuracyApi/src/Services/AporteService.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
+require_once __DIR__ . "/../Services/CarteiraService.php";
 
 function buscarAportesDoUsuario(){
     global $conexao;
@@ -112,7 +113,7 @@ function aporteRecorrente(){
             }
 
             if (
-                !carteiraPertenceAoUsuario(
+                !carteiraPertenceAoUsuarioService(
                     $conexao,
                     $idCarteira,
                     $idUsuario
@@ -163,7 +164,7 @@ function aporteRecorrente(){
             }
 
             if (
-                !carteiraPertenceAoUsuario(
+                !carteiraPertenceAoUsuarioService(
                     $conexao,
                     $idCarteira,
                     $idUsuario
@@ -179,10 +180,7 @@ function aporteRecorrente(){
                 exit;
             }
 
-            $aportes = listarAporteRecorrente(
-                $conexao,
-                $idCarteira
-            );
+            $aportes = listarAporteRecorrenteService($conexao, $idCarteira);
 
             echo json_encode([
                 "sucesso" => true,
@@ -190,7 +188,6 @@ function aporteRecorrente(){
             ]);
 
             break;
-
 
         case "atualizar":
 
@@ -227,7 +224,7 @@ function aporteRecorrente(){
             }
 
 
-            $aporte = getIdAporteRecorrente($conexao, $idAporteRecorrente);
+            $aporte = getIdAporteRecorrenteService($conexao, $idAporteRecorrente);
 
             if (!$aporte) {
 
@@ -243,7 +240,7 @@ function aporteRecorrente(){
 
 
             if (
-                !carteiraPertenceAoUsuario(
+                !carteiraPertenceAoUsuarioService(
                     $conexao,
                     $aporte["id_carteira"],
                     $idUsuario
@@ -261,7 +258,7 @@ function aporteRecorrente(){
             }
 
 
-            $resultado = atualizarAporteRecorrente(
+            $resultado = atualizarAporteRecorrenteService(
                 $conexao,
                 $idAporteRecorrente,
                 $valorRecorrente,
