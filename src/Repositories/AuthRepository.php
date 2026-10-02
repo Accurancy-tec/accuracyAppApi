@@ -83,3 +83,113 @@ function gerarTokenUsuario(PDO $conexao, $idUsuario, $codigoHash, $expiraEm)
 
     return $stmtToken->execute();
 }
+
+function loginSite(PDO $conexao, $email)
+{
+    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->bindParam(":email_usuario", $email);
+    $stmt->execute();
+
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function findByEmail(PDO $conexao, $email)
+{
+    $sql = "SELECT id_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email LIMIT 1";
+    $stmt = $conexao->prepare($sql);
+    $stmt->bindValue(
+        ":email",
+        $email,
+        PDO::PARAM_STR
+    );
+
+    $stmt->execute();
+
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function invalidarToken(PDO $conexao, $idUsuario)
+{
+    $sqlInvalidarTokens = "UPDATE token_usuario SET usado_em = NOW() WHERE id_usuario = :id_usuario AND tipo_token = 'verificacao_email'AND usado_em IS NULL";
+
+    $stmtInvalidar = $conexao->prepare($sqlInvalidarTokens);
+
+    $stmtInvalidar->bindValue(
+        ":id_usuario",
+        $idUsuario,
+        PDO::PARAM_INT
+    );
+
+    return $stmtInvalidar->execute();
+}
+
+function getUsuarioToken(PDO $conexao, $idUsuario)
+{
+    $sqlToken = "
+        SELECT
+            id_token,
+            token_hash,
+            expira_em
+        FROM token_usuario
+        WHERE id_usuario = :id_usuario
+          AND tipo_token = 'verificacao_email'
+          AND usado_em IS NULL
+        ORDER BY criado_em DESC
+        LIMIT 1
+    ";
+
+    $stmtToken = $conexao->prepare($sqlToken);
+
+    $stmtToken->bindValue(
+        ":id_usuario",
+        $idUsuario,
+        PDO::PARAM_INT
+    );
+
+    $stmtToken->execute();
+
+    return $stmtToken->fetch(PDO::FETCH_ASSOC);
+}
+
+function usarToken(PDO $conexao, $token)
+{
+    $sqlUsarToken = "
+        UPDATE token_usuario
+        SET usado_em = NOW()
+        WHERE id_token = :id_token
+    ";
+
+    $stmtUsarToken = $conexao->prepare($sqlUsarToken);
+
+    $stmtUsarToken->bindValue(
+        ":id_token",
+        $token["id_token"],
+        PDO::PARAM_INT
+    );
+
+    return $stmtUsarToken->execute();
+}
+
+function verificarEmail(PDO $conexao, $idUsuario){
+    $sqlVerificarEmail = "
+        UPDATE usuario
+        SET
+            email_verificado_usuario = TRUE,
+            atualizado_em = NOW()
+        WHERE id_usuario = :id_usuario
+    ";
+
+        $stmtVerificarEmail = $conexao->prepare(
+            $sqlVerificarEmail
+        );
+
+        $stmtVerificarEmail->bindValue(
+            ":id_usuario",
+            $idUsuario,
+            PDO::PARAM_INT
+        );
+
+        $stmtVerificarEmail->execute();
+}

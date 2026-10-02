@@ -6,6 +6,9 @@ require "../config/cors.php";
 require_once "../accuracyApi/src/Middleware/Authentication.php";
 require_once "../accuracyApi/src/Services/AtivoService.php";
 require_once "../accuracyApi/src/Services/CotacaoService.php";
+require_once "../accuracyApi/src/Services/PosicaoService.php";
+require_once "../accuracyApi/src/Services/CarteiraService.php";
+require_once "../accuracyApi/src/Services/AporteService.php";
  
 autenticar();
  
@@ -31,7 +34,7 @@ try {
             exit;
         }
  
-        $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
+        $idAtivo = buscarOuCriarAtivoService($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
         salvarCotacaoService($conexao, $idAtivo, $dataCotacao, $precoAtivo);
  
         echo json_encode([
