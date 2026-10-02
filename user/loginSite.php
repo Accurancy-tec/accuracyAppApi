@@ -2,7 +2,7 @@
 
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once __DIR__ . "/../Authentication/tokenLogin.php";
+require_once __DIR__ . "/../src/Middleware/Authentication.php";
 require_once __DIR__ . "/../database/conexao.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {

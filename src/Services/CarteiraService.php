@@ -8,3 +8,11 @@ function criarCarteiraService(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCart
 {
     return criarCarteira($conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $saldoLivre); 
 }
+
+function carteiraPertenceAoUsuarioService(PDO $conexao, $idCarteira, $idUsuario){
+    return carteiraPertenceAoUsuario($conexao, $idCarteira, $idUsuario);
+}
+
+function getCarteirasDoUsuarioService(PDO $conexao, $id_usuario){
+    return getCarteirasDoUsuario($conexao, $id_usuario);
+}

@@ -34,7 +34,7 @@ function listarAtivos(PDO $conexao){
     $ativos = $sql->fetchAll(PDO::FETCH_ASSOC);
  
     foreach ($ativos as &$ativo) {
-        $ativo["ultima_cotacao"] = buscarUltimaCotacaoService($conexao, $ativo["id_ativo"]);
+        $ativo["ultima_cotacao"] = getUltimaCotacaoService($conexao, $ativo["id_ativo"]);
     }
 
     return $ativos;
