@@ -8,8 +8,14 @@ require_once __DIR__ . "/../Authentication/Authentication.php";
 try {
 
     $id_usuario = autenticar();
+    $limite = (int)($_GET['limite'] ?? 4); // Pega o limite da query string, se não estiver definido, usa 4 como padrão
+    if ($limite < 1 || $limite > 1000){
+        $limite = 4; // Define um limite padrão se o valor fornecido for inválido
+    }
     $sql = $conexao->prepare("
         SELECT
+            a.id_carteira,
+            a.data_aporte,
             a.id_aporte,
             at.simbolo_ativo AS ativo_aporte,
             at.nome_ativo AS name_ativo,
