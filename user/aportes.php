@@ -6,13 +6,15 @@ header("Content-Type: application/json; charset=UTF-8");
 require "../database/conexao.php"; 
 require_once "../service/posicaoService.php";
 require_once "../service/ativoService.php";
+require_once "../Authentication/Authentication.php";
+require_once "../service/carteiraService.php";
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
     $simboloAtivo = $dados["ativo_aporte"] ?? null;
     $nomeAtivo = $dados["name_ativo"] ?? null;
     $categoriaAtivo = $dados["categoria_ativo"] ?? null;
-    $idWallet = 2;
+    $idWallet = $dados['id_carteira'] ?? null;
     $typeContribution = $dados['tipo_aporte'] ?? null;
     $contributionQuantity = $dados['quantidade_aporte'] ?? null;
     $contributionAmount = $dados['valor_aporte'] ?? null;
