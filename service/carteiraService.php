@@ -17,3 +17,16 @@ function criarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $
 
     return $nova["id_carteira"];
 }
+function listarCarteiras(PDO $conexao, $idUsuario)
+{
+    $sql = "SELECT id_carteira, nome_carteira, tipo_carteira, saldo_livre_carteira
+            FROM carteira
+            WHERE id_usuario = ?
+            ORDER BY id_carteira";
+
+    $consulta = $conexao->prepare($sql);
+    $consulta->bindParam(1, $idUsuario);
+    $consulta->execute();
+
+    return $consulta->fetchAll(PDO::FETCH_ASSOC);
+}
