@@ -23,19 +23,3 @@ function buscarOuCriarAtivo(PDO $conexao, $simboloAtivo, $nomeAtivo, $categoriaA
 
     return $novo["id_ativo"];
 }
-
-function listarAtivos(PDO $conexao){
-    $sql = $conexao->prepare(
-        "SELECT id_ativo, simbolo_ativo, nome_ativo, categoria_ativo, cotacao_automatica_ativo FROM ativo ORDER BY nome_ativo ASC"
-    );
-
-    $sql->execute();
-
-    $ativos = $sql->fetchAll(PDO::FETCH_ASSOC);
- 
-    foreach ($ativos as &$ativo) {
-        $ativo["ultima_cotacao"] = getUltimaCotacaoService($conexao, $ativo["id_ativo"]);
-    }
-
-    return $ativos;
-}
