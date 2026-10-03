@@ -3,9 +3,10 @@ header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
 require "../config/cors.php";
-require_once "../accuracyApi/src/Service/PosicaoService.php";
-require_once "../accuracyApi/src/Service/AtivoService.php";
-require_once "../accuracyApi/src/Services/AporteService.php";
+require_once __DIR__ . "/../Middleware/Authentication.php";
+require_once __DIR__ . "/../Services/PosicaoService.php";
+require_once __DIR__ ."/../Services/AtivoService.php";
+require_once __DIR__ . "/../Services/AporteService.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";

@@ -5,10 +5,13 @@ header("Content-Type: application/json; charset=UTF-8");
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../database/conexao.php";
 
-try {
-    $id_usuario = autenticar();
+function gerarGrafico()
+{
+    global $conexao;
+    try {
+        $id_usuario = autenticar();
 
-    $sql = $conexao->prepare("
+        $sql = $conexao->prepare("
         SELECT
             at.simbolo_ativo AS ativo_aporte,
             a.valor_aporte AS preco_aporte
@@ -22,27 +25,27 @@ try {
         LIMIT 4
     ");
 
-    $sql->execute([$id_usuario]);
+        $sql->execute([$id_usuario]);
 
-    $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);
+        $resposta = $sql->fetchAll(PDO::FETCH_ASSOC);
 
-    $dados = [];
+        $dados = [];
 
-    foreach ($resposta as $row) {
-        $dados[] = [
-            "ativo_aporte" => $row["ativo_aporte"],
-            "preco_aporte" => (float) $row["preco_aporte"]
-        ];
+        foreach ($resposta as $row) {
+            $dados[] = [
+                "ativo_aporte" => $row["ativo_aporte"],
+                "preco_aporte" => (float) $row["preco_aporte"]
+            ];
+        }
+
+        echo json_encode([
+            "dados" => $dados
+        ]);
+    } catch (Throwable $e) {
+
+        echo json_encode([
+            "dados" => [],
+            "erro" => $e->getMessage()
+        ]);
     }
-
-    echo json_encode([
-        "dados" => $dados
-    ]);
-
-} catch (Throwable $e) {
-
-    echo json_encode([
-        "dados" => [],
-        "erro" => $e->getMessage()
-    ]);
 }

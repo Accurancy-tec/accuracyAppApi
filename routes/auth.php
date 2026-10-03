@@ -23,7 +23,7 @@ switch ($acao) {
         break;
 
     case 'registrarNovoUsuario':
-        registrarNovoUsuario();
+        registrarUsuario();
         break;
 
     case 'refresh':

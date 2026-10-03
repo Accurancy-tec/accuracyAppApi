@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__. "/../Services/AuthService.php";
 
 function login()
 {
@@ -81,7 +82,7 @@ function login()
     ]);
 }
 
-function registrarNovoUsuario()
+function registrarUsuario()
 {
     global $conexao;
 
@@ -252,7 +253,7 @@ function loginSite()
         exit;
     }
 
-    $usuario = loginSiteService($conexao, $email);
+    $usuario = loginUsuarioSiteService($conexao, $email);
 
     if (!$usuario) {
         echo json_encode([

@@ -6,7 +6,7 @@ require_once __DIR__ . "/../Repositories/CarteiraRepository.php";
 // e retorna o id dela
 function criarCarteiraService(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $saldoLivre)
 {
-    return criarCarteira($conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $saldoLivre); 
+    return registrarCarteira($conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $saldoLivre); 
 }
 
 function carteiraPertenceAoUsuarioService(PDO $conexao, $idCarteira, $idUsuario){

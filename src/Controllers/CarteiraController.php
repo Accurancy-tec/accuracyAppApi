@@ -1,11 +1,10 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 
-require "../database/conexao.php"; 
-include "../accuracyApi/src/Middleware/Authentication.php";
+require "../database/conexao.php";
 require "../config/cors.php";
-require_once "../accuracyApi/src/Middleware/Authentication.php";
-require_once "../accuracyApi/src/Services/CarteiraService.php";
+require_once __DIR__ . "/../Middleware/Authentication.php";
+require_once __DIR__ . "/../Services/CarteiraService.php";
 
 function criarCarteira(){
     global $conexao;

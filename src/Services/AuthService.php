@@ -2,7 +2,7 @@
 require_once __DIR__ . "/../Repositories/AuthRepository.php";
 
     function loginService(PDO $conexao, $email){
-        return login($conexao, $email);
+        return loginUsuario($conexao, $email);
     }
 
     function criarSessaoUsuarioService(PDO $conexao, $usuario, $refreshTokenHash, $expiraEm){
@@ -21,7 +21,7 @@ require_once __DIR__ . "/../Repositories/AuthRepository.php";
         return gerarTokenUsuario($conexao, $idUsuario, $codigoHash, $expiraEm);
     }
 
-    function loginSiteService(PDO $conexao, $email){
+    function loginUsuarioSiteService(PDO $conexao, $email){
         return loginSite($conexao, $email);
     }
 

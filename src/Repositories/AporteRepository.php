@@ -16,7 +16,7 @@ function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quant
     ); 
 
     $sql->execute([
-        ':id_aporte' => $id_carteira,
+        ':id_carteira' => $id_carteira,
         ':id_ativo' => $id_ativo,
         ':tipo_aporte' => $tipo_aporte,
         ':quantidade_aporte' => $quantidade_aporte,
