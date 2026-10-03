@@ -8,26 +8,29 @@ $partes = explode('/', trim($uri, '/'));
 
 switch (true) {
 
-    case $partes[0] === '/auth':
+    case $partes[0] === 'auth':
         require __DIR__ . '/../routes/auth.php';
         break;
 
-    case $partes[0] === '/aportes':
+    case $partes[0] === 'aportes':
         require __DIR__ . '/../routes/aportes.php';
         break;
 
-    case $partes[0] === '/carteiras':
-        require __DIR__ . '/../routes/carteiras.php';
+    case $partes[0] === 'carteiras':
+        require __DIR__ . '/../routes/carteira.php';
         break;
 
-    case $partes[0] === '/brapi':
+    case $partes[0] === 'brapi':
         require __DIR__ . '/../routes/brapi.php';
+        break;
+
+    case $partes[0] == 'vico':
+        require __DIR__ . '/../routes/vico.php';
         break;
 
     default:
 
         http_response_code(404);
-
         echo json_encode([
             'sucesso' => false,
             'mensagem' => 'Rota não encontrada'

@@ -1,5 +1,5 @@
 <?php
-function login(PDO $conexao, $email)
+function loginUsuario(PDO $conexao, $email)
 {
     $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
 
@@ -84,7 +84,7 @@ function gerarTokenUsuario(PDO $conexao, $idUsuario, $codigoHash, $expiraEm)
     return $stmtToken->execute();
 }
 
-function loginSite(PDO $conexao, $email)
+function loginUsuarioSite(PDO $conexao, $email)
 {
     $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
 
