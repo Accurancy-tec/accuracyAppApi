@@ -2,7 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . "/../service/carteiraService.php";
+require_once __DIR__ . "/../src/Services/carteiraService.php";
 
 final class CarteiraServiceTest extends TestCase
 {
@@ -37,7 +37,7 @@ final class CarteiraServiceTest extends TestCase
         $tipoCarteira = "Simulada";
         $saldoLivre = "-10.00";
 
-        $idCarteira = criarCarteira(
+        $idCarteira = criarCarteiraService(
             $this->conexao,
             $idUsuario,
             $this->nomeCarteiraTeste,
