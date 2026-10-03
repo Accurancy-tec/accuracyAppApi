@@ -2,9 +2,9 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . "/../src/Services/ativoService.php";
-require_once __DIR__ . "/../src/Services/posicaoService.php";
-require_once __DIR__ . "/../src/Services/carteiraService.php";
+require_once __DIR__ . "/../service/ativoService.php";
+require_once __DIR__ . "/../service/posicaoService.php";
+require_once __DIR__ . "/../service/carteiraService.php";
 
 final class BuscarPosicoesTest extends TestCase
 {
@@ -31,7 +31,7 @@ final class BuscarPosicoesTest extends TestCase
         );
 
         // Cria a carteira de teste
-        $this->idCarteira = criarCarteiraService(
+        $this->idCarteira = criarCarteira(
             $this->conexao,
             1,
             'TEST_' . time(),
