@@ -52,11 +52,11 @@ function enviarCodigo($email, $codigo)
         $mail->send();
 
         return true;
+    } catch (\Exception $erro) {
 
-    } catch (Exception $erro) {
-
-        error_log("Erro ao enviar email: " . $erro->getMessage());
-
-        return false;
+        return [
+            "sucesso" => false,
+            "erro" => $erro->getMessage()
+        ];
     }
 }
