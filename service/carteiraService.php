@@ -17,3 +17,26 @@ function criarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $
 
     return $nova["id_carteira"];
 }
+
+function resolverCarteiraDoUsuario(PDO $conexao, $idUsuario, $idCarteiraInformada = null)
+{
+    if ($idCarteiraInformada !== null && $idCarteiraInformada !== "") {
+
+        $stmt = $conexao->prepare("SELECT id_carteira FROM carteira WHERE id_carteira = ? AND id_usuario = ?");
+        $stmt->execute([$idCarteiraInformada, $idUsuario]);
+        $achada = $stmt->fetchColumn();
+
+        return $achada === false ? null : (int) $achada;
+    }
+
+    $stmt = $conexao->prepare("SELECT id_carteira FROM carteira WHERE id_usuario = ? ORDER BY id_carteira ASC LIMIT 1");
+    $stmt->execute([$idUsuario]);
+    $existente = $stmt->fetchColumn();
+
+    if ($existente !== false) {
+        return (int) $existente;
+    }
+
+    return (int) criarCarteira($conexao, $idUsuario, "Carteira principal", "Real", 0);
+}
+?>

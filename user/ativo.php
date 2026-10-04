@@ -1,8 +1,8 @@
 <?php
+require_once __DIR__ . "/../config/cors.php";
 header("Content-Type: application/json; charset=UTF-8");
  
 require "../database/conexao.php";
-require "../config/cors.php";
 require_once "../Authentication/Authentication.php";
 require_once "../service/ativoService.php";
 require_once "../service/cotacaoService.php";
@@ -32,6 +32,27 @@ try {
         }
  
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
+
+        // Catálogo de ativos é COMPARTILHADO. Ativo com cotação automática é preço do cron (Brapi);
+        // senão qualquer usuário logado mudava o preço do PETR4 para todo mundo.
+        $stmtAuto = $conexao->prepare("SELECT cotacao_automatica_ativo::int FROM ativo WHERE id_ativo = ?");
+        $stmtAuto->execute([$idAtivo]);
+
+        if ((int) $stmtAuto->fetchColumn() === 1) {
+            http_response_code(403);
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "Este ativo tem cotação automática; o preço é atualizado pelo servidor."
+            ]);
+            exit;
+        }
+
+        if (!is_numeric($precoAtivo) || (float) $precoAtivo <= 0) {
+            http_response_code(400);
+            echo json_encode(["sucesso" => false, "mensagem" => "preco_ativo deve ser um número maior que zero."]);
+            exit;
+        }
+
         salvarCotacao($conexao, $idAtivo, $dataCotacao, $precoAtivo);
  
         echo json_encode([
@@ -76,3 +97,4 @@ try {
         "mensagem" => "Erro: " . $erro->getMessage()
     ]);
 }
+?>

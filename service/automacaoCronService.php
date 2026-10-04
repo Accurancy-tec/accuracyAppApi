@@ -1,11 +1,4 @@
 <?php
-
-// Automações da API (cron): atualiza cotações e executa aportes recorrentes.
-//
-// Arquivo NOVO. Não altera nenhum arquivo existente, só reaproveita funções que já existem:
-//   buscarUltimaCotacao() e salvarCotacao()  -> service/cotacaoService.php
-//   atualizarPosicao()                       -> service/posicaoService.php
-
 require_once __DIR__ . "/cotacaoService.php";
 require_once __DIR__ . "/posicaoService.php";
 
@@ -200,27 +193,41 @@ function atualizarCotacoesAutomaticasCron(PDO $conexao)
 
     foreach (array_chunk($ativos, CRON_LOTE_BRAPI) as $lote) {
 
-        $simbolos = array_column($lote, "simbolo_ativo");
+        $precos = [];
+        $falhas = [];   // "PETR4" => mensagem de erro
 
         try {
-            $precos = buscarPrecosBrapiCron($simbolos);
+            $precos = buscarPrecosBrapiCron(array_column($lote, "simbolo_ativo"));
         } catch (Throwable $erro) {
 
-            foreach ($lote as $ativo) {
-                $resultado["erros"]++;
-                $resultado["detalhes"][] = [
-                    "ativo" => $ativo["simbolo_ativo"],
-                    "status" => "erro",
-                    "mensagem" => $erro->getMessage()
-                ];
+            if (count($lote) === 1) {
+                $falhas[strtoupper($lote[0]["simbolo_ativo"])] = $erro->getMessage();
+            } else {
+                // Um ticker inválido não pode derrubar os outros 9 do lote: tenta um por um.
+                foreach ($lote as $ativo) {
+                    try {
+                        $precos += buscarPrecosBrapiCron([$ativo["simbolo_ativo"]]);
+                    } catch (Throwable $erroIndividual) {
+                        $falhas[strtoupper($ativo["simbolo_ativo"])] = $erroIndividual->getMessage();
+                    }
+                }
             }
-
-            continue;
         }
 
         foreach ($lote as $ativo) {
 
             $chave = strtoupper($ativo["simbolo_ativo"]);
+
+            if (isset($falhas[$chave])) {
+                $resultado["erros"]++;
+                $resultado["detalhes"][] = [
+                    "ativo" => $ativo["simbolo_ativo"],
+                    "status" => "erro",
+                    "mensagem" => $falhas[$chave]
+                ];
+                continue;
+            }
+
             $preco = $precos[$chave] ?? null;
 
             if ($preco === null || $preco <= 0) {
@@ -282,9 +289,6 @@ function processarAportesRecorrentesCron(PDO $conexao)
 
             $conexao->beginTransaction();
 
-            // Trava a linha. Se outra execução do cron estiver processando a mesma linha,
-            // o SKIP LOCKED pula e o aporte não é criado em duplicidade.
-            // A condição de data é conferida de novo aqui, já com a linha travada.
             $stmt = $conexao->prepare("
                 SELECT
                     r.id_aporte_recorrente,
@@ -377,8 +381,6 @@ function processarAportesRecorrentesCron(PDO $conexao)
                 )
             ");
 
-            // Se o servidor/cron ficou parado, executa cada data atrasada (uma por vez),
-            // cada aporte com a sua data, até alcançar hoje.
             $criados = 0;
 
             while ($dataExecucao <= $hoje && $criados < CRON_MAX_EXECUCOES_POR_RODADA) {
@@ -449,9 +451,6 @@ function processarAportesRecorrentesCron(PDO $conexao)
     return $resultado;
 }
 
-
-// Roda tudo na ordem certa: primeiro as cotações, depois os aportes (que usam essas cotações).
-// Se a atualização de cotações falhar, os aportes ainda rodam e a trava de cotação velha protege o preço.
 function executarAutomacoesCron(PDO $conexao)
 {
     try {
@@ -472,3 +471,4 @@ function executarAutomacoesCron(PDO $conexao)
         "aportes_recorrentes" => $aportes
     ];
 }
+?>

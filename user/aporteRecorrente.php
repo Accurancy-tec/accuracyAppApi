@@ -1,244 +1,121 @@
 <?php
-
 header("Content-Type: application/json; charset=UTF-8");
 
-require_once "../config/cors.php";
-require_once "../database/conexao.php";
-require_once "../Authentication/Authentication.php";
-require_once "../service/aporteRecorrenteService.php";
+require_once __DIR__ . "/../config/cors.php";
+require_once __DIR__ . "/../database/conexao.php";
+require_once __DIR__ . "/../Authentication/Authentication.php";
+require_once __DIR__ . "/../service/aporteRecorrenteService.php";
+
+function responderRecorrente(array $corpo, $httpStatus = 200)
+{
+    http_response_code($httpStatus);
+    echo json_encode($corpo, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    responderRecorrente(["sucesso" => false, "mensagem" => "Método não permitido. Use POST."], 405);
+}
+
+$idUsuario = autenticar();
+
+$dados = json_decode(file_get_contents("php://input"), true);
+
+if (!is_array($dados)) {
+    responderRecorrente(["sucesso" => false, "mensagem" => "Corpo inválido: envie um JSON."], 400);
+}
 
 try {
-
-    $idUsuario = autenticar();
-
-    $dados = json_decode(file_get_contents("php://input"), true);
 
     $acao = $dados["acao"] ?? null;
 
     switch ($acao) {
 
-        case "criar":
-
-            $idCarteira = $dados["id_carteira"] ?? null;
-            $idAtivo = $dados["id_ativo"] ?? null;
-            $valorRecorrente = $dados["valor_recorrente"] ?? null;
-            $frequenciaRecorrente = $dados["frequencia_recorrente"] ?? null;
-            $diaReferenciaRecorrente = $dados["dia_referencia_recorrente"] ?? null;
-            $proximaExecucaoRecorrente = $dados["proxima_execucao_recorrente"] ?? null;
-
-            if (
-                !$idCarteira ||
-                !$idAtivo ||
-                $valorRecorrente === null ||
-                !$frequenciaRecorrente ||
-                !$proximaExecucaoRecorrente
-            ) {
-                http_response_code(400);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "Dados obrigatórios não informados"
-                ]);
-
-                exit;
-            }
-
-            if (
-                !carteiraPertenceAoUsuario(
-                    $conexao,
-                    $idCarteira,
-                    $idUsuario
-                )
-            ) {
-                http_response_code(403);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "A carteira não pertence ao usuário"
-                ]);
-
-                exit;
-            }
-
-            $id = criarAporteRecorrente(
-                $conexao,
-                $idCarteira,
-                $idAtivo,
-                $valorRecorrente,
-                $frequenciaRecorrente,
-                $diaReferenciaRecorrente,
-                $proximaExecucaoRecorrente
-            );
-
-            echo json_encode([
-                "sucesso" => true,
-                "mensagem" => "Aporte recorrente criado com sucesso",
-                "id_aporte_recorrente" => $id
-            ]);
-
-            break;
-
-
         case "listar":
 
-            $idCarteira = $dados["id_carteira"] ?? null;
+            $idCarteira = $dados["id_carteira"] ?? null;   // opcional: sem ele, traz de todas as carteiras do usuário
 
-            if (!$idCarteira) {
-                http_response_code(400);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "id_carteira é obrigatório"
-                ]);
-
-                exit;
+            if ($idCarteira !== null && $idCarteira !== "" && !carteiraPertenceAoUsuario($conexao, $idCarteira, $idUsuario)) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "A carteira não pertence ao usuário"], 403);
             }
 
-            if (
-                !carteiraPertenceAoUsuario(
-                    $conexao,
-                    $idCarteira,
-                    $idUsuario
-                )
-            ) {
-                http_response_code(403);
+            $aportes = listarAporteRecorrente($conexao, $idUsuario, $idCarteira);
 
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "A carteira não pertence ao usuário"
-                ]);
+            responderRecorrente(["sucesso" => true, "quantidade" => count($aportes), "aportes" => $aportes]);
 
-                exit;
+        case "alternar":
+
+            $id = $dados["id_aporte_recorrente"] ?? null;
+            $ligar = $dados["ativo"] ?? null;   // true = ligar, false = desligar
+
+            if (!$id || !is_bool($ligar)) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "Envie id_aporte_recorrente e ativo (true/false)."], 400);
             }
 
-            $aportes = listarAporteRecorrente(
-                $conexao,
-                $idCarteira
-            );
+            $regra = buscarAporteRecorrenteDoUsuario($conexao, $id, $idUsuario);
 
-            echo json_encode([
+            if (!$regra) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "Aporte recorrente não encontrado"], 404);
+            }
+
+            $proxima = alternarAporteRecorrente($conexao, $regra, $ligar);
+
+            responderRecorrente([
                 "sucesso" => true,
-                "aportes" => $aportes
+                "mensagem" => $ligar ? "Aporte recorrente ligado" : "Aporte recorrente desligado",
+                "ativo" => $ligar,
+                "proxima_execucao" => $proxima
             ]);
-
-            break;
-
 
         case "atualizar":
 
-            $idAporteRecorrente =
-                $dados["id_aporte_recorrente"] ?? null;
+            $id = $dados["id_aporte_recorrente"] ?? null;
+            $novoValor = $dados["valor_recorrente"] ?? null;
+            $novaFrequencia = $dados["frequencia_recorrente"] ?? null;
 
-            $valorRecorrente =
-                $dados["valor_recorrente"] ?? null;
-
-            $frequenciaRecorrente =
-                $dados["frequencia_recorrente"] ?? null;
-
-            $diaReferenciaRecorrente =
-                $dados["dia_referencia_recorrente"] ?? null;
-
-            $ativoFlagRecorrente =
-                $dados["ativo_flag_recorrente"] ?? null;
-
-
-            if (
-                !$idAporteRecorrente ||
-                $valorRecorrente === null ||
-                !$frequenciaRecorrente ||
-                $ativoFlagRecorrente === null
-            ) {
-                http_response_code(400);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "Dados obrigatórios não informados"
-                ]);
-
-                exit;
+            if (!$id || ($novoValor === null && $novaFrequencia === null)) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "Envie id_aporte_recorrente e valor_recorrente e/ou frequencia_recorrente."], 400);
             }
 
-
-            $sql = "
-                SELECT id_carteira
-                FROM aporte_recorrente
-                WHERE id_aporte_recorrente = ?
-            ";
-
-            $stmt = $conexao->prepare($sql);
-            $stmt->execute([$idAporteRecorrente]);
-
-            $aporte = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$aporte) {
-
-                http_response_code(404);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "Aporte recorrente não encontrado"
-                ]);
-
-                exit;
+            if ($novoValor !== null && (!is_numeric($novoValor) || (float) $novoValor <= 0)) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "valor_recorrente deve ser maior que zero."], 400);
             }
 
-
-            if (
-                !carteiraPertenceAoUsuario(
-                    $conexao,
-                    $aporte["id_carteira"],
-                    $idUsuario
-                )
-            ) {
-                http_response_code(403);
-
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" =>
-                        "Aporte recorrente não pertence ao usuário"
-                ]);
-
-                exit;
+            if ($novaFrequencia !== null && !in_array($novaFrequencia, FREQUENCIAS_RECORRENTE, true)) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "frequencia_recorrente inválida. Use: " . implode(", ", FREQUENCIAS_RECORRENTE) . "."], 400);
             }
 
+            $regra = buscarAporteRecorrenteDoUsuario($conexao, $id, $idUsuario);
 
-            $resultado = atualizarAporteRecorrente(
+            if (!$regra) {
+                responderRecorrente(["sucesso" => false, "mensagem" => "Aporte recorrente não encontrado"], 404);
+            }
+
+            $proxima = atualizarAporteRecorrente(
                 $conexao,
-                $idAporteRecorrente,
-                $valorRecorrente,
-                $frequenciaRecorrente,
-                $diaReferenciaRecorrente,
-                $ativoFlagRecorrente
+                $regra,
+                $novoValor === null ? null : round((float) $novoValor, 2),
+                $novaFrequencia
             );
 
-
-            echo json_encode([
-                "sucesso" => $resultado,
-                "mensagem" => $resultado
-                    ? "Aporte recorrente atualizado com sucesso"
-                    : "Nenhuma alteração realizada"
+            responderRecorrente([
+                "sucesso" => true,
+                "mensagem" => "Aporte recorrente atualizado com sucesso",
+                "proxima_execucao" => $proxima
             ]);
-
-            break;
-
 
         default:
 
-            http_response_code(400);
-
-            echo json_encode([
+            responderRecorrente([
                 "sucesso" => false,
-                "mensagem" =>
-                    "Ação inválida. Use criar, listar ou atualizar"
-            ]);
+                "mensagem" => "Ação inválida. Use listar, alternar ou atualizar. (Para CRIAR um recorrente, envie o aporte em user/aportes.php com recorrencia_aporte diferente de Único.)"
+            ], 400);
     }
 
 } catch (Throwable $erro) {
 
-    http_response_code(500);
+    error_log("aporteRecorrente.php: " . $erro->getMessage());
 
-    echo json_encode([
-        "sucesso" => false,
-        "mensagem" => "Erro interno: " . $erro->getMessage()
-    ]);
+    responderRecorrente(["sucesso" => false, "mensagem" => "Erro interno ao processar o aporte recorrente."], 500);
 }
+?>
