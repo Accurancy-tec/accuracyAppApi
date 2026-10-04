@@ -162,7 +162,7 @@ function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorre
     return $update;
 
 }
-function excluirAporte(PDO $conexao, $idAporte, $idUsuario)
+function excluirAporteRepository(PDO $conexao, $idAporte, $idUsuario)
 {
     $sql = "
         DELETE FROM aporte
@@ -175,10 +175,7 @@ function excluirAporte(PDO $conexao, $idAporte, $idUsuario)
     ";
 
     $stmt = $conexao->prepare($sql);
-    $stmt->execute([
-        $idAporte,
-        $idUsuario
-    ]);
+    $stmt->execute([$idAporte, $idUsuario]);
 
     return $stmt->rowCount() > 0;
 }
