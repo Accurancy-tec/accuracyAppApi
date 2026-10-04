@@ -33,29 +33,6 @@ function updateAporteRecorrenteService(PDO $conexao, $proximaExecucao, $idAporte
     return updateAporteRecorrente($conexao, $proximaExecucao, $idAporteRecorrente);
 }
 
-function calcularProximaExecucaoService($dataAtual, $frequencia)
-{
-    switch ($frequencia) {
-
-        case "Diário":
-            return date("Y-m-d", strtotime($dataAtual . " +1 day"));
-
-        case "Semanal":
-            return date("Y-m-d", strtotime($dataAtual . " +7 days"));
-
-        case "Mensal":
-            return date("Y-m-d", strtotime($dataAtual . " +1 month"));
-
-        case "Anual":
-            return date("Y-m-d", strtotime($dataAtual . " +1 year"));
-
-        default:
-            throw new Exception(
-                "Frequência inválida: " . $frequencia
-            );
-    }
-}
-
 function getIdAporteRecorrenteService(PDO $conexao, $idAporteRecorrente){
     return getIdAporteRecorrente($conexao, $idAporteRecorrente);
 }

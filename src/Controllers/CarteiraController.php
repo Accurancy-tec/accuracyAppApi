@@ -5,6 +5,7 @@ require "../database/conexao.php";
 require "../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
+require_once __DIR__ . "/../../config/cors.php";
 
 function criarCarteira()
 {
