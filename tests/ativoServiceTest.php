@@ -2,8 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
-require_once __DIR__ . "/../service/ativoService.php";
-
+require_once __DIR__ . "/../src/Services/ativoService.php";
 final class AtivoServiceTest extends TestCase
 {
     private PDO $conexao;

@@ -13,6 +13,17 @@ COPY . .
 
 RUN composer install --no-dev --optimize-autoloader
 
+# Habilita o mod_rewrite do Apache
+RUN a2enmod rewrite
+
+# Define a pasta public como raiz pública
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+
+# Altera o DocumentRoot do Apache
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+    /etc/apache2/sites-available/*.conf \
+    /etc/apache2/apache2.conf
+    
 RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
