@@ -162,3 +162,23 @@ function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorre
     return $update;
 
 }
+function excluirAporte(PDO $conexao, $idAporte, $idUsuario)
+{
+    $sql = "
+        DELETE FROM aporte
+        WHERE id_aporte = ?
+        AND id_carteira IN (
+            SELECT id_carteira
+            FROM carteira
+            WHERE id_usuario = ?
+        )
+    ";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([
+        $idAporte,
+        $idUsuario
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
