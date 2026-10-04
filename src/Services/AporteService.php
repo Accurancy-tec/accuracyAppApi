@@ -43,5 +43,5 @@ function atualizarAporteRecorrenteService(PDO $conexao, $idAporteRecorrente, $va
 
 function excluirAporteService(PDO $conexao, $idAporte, $idUsuario)
 {
-    return excluirAporte($conexao, $idAporte, $idUsuario);
+    return excluirAporteRepository($conexao, $idAporte, $idUsuario);
 }
