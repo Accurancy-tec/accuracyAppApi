@@ -24,8 +24,12 @@ switch (true) {
         require __DIR__ . '/../routes/brapi.php';
         break;
 
-    case $partes[0] == 'vico':
+    case $partes[0] === 'vico':
         require __DIR__ . '/../routes/vico.php';
+        break;
+    
+    case $partes[0] === 'automacao':
+        require __DIR__ . '/../routes/automacao.php';
         break;
 
     default:

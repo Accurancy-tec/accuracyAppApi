@@ -15,4 +15,4 @@ jobs:
         run: |
           curl -X POST \
             -H "X-Cron-Key: ${{ secrets.CRON_SECRET }}" \
-            "https://accuracyappapi.onrender.com/user/executarAportesRecorrentes.php"
+            "https://accuracyappapi.onrender.com/automacao/realizar-aporte-recorrente"
