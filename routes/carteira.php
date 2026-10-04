@@ -17,7 +17,7 @@ switch ($acao) {
         break;
 
     case 'excluir-carteira':
-        break; 
+        break;
 
     default:
 
@@ -28,5 +28,9 @@ switch ($acao) {
             'mensagem' => 'Ação não encontrada'
         ]);
 
+        break;
+
+    case 'buscar-posicoes':
+        itemInvestimento();
         break;
 }
