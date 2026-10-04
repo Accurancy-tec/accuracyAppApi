@@ -6,24 +6,23 @@ require "../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 
-function criarCarteira(){
-    global $conexao;
-
-    $dados = json_decode(file_get_contents("php://input"), true);
-
-    $idUser = autenticar();
-    $nameWallet = $dados['nome_carteira'];
-    $typeWallet = $dados['tipo_carteira'];
-    $availableWalletBalance = $dados['saldo_livre_carteira'];
-    
-
+function criarCarteira()
+{
     try {
-        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $availableWalletBalance);
-            echo json_encode([
-                "sucesso" => true,
-                "mensagem" => "carteira cadastrado com sucesso"
-            ]);
 
+        global $conexao;
+
+        $dados = json_decode(file_get_contents("php://input"), true);
+
+        $idUser = autenticar();
+        $nameWallet = $dados['nome_carteira'];
+        $typeWallet = $dados['tipo_carteira'];
+
+        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet);
+        echo json_encode([
+            "sucesso" => true,
+            "mensagem" => "carteira cadastrado com sucesso"
+        ]);
     } catch (PDOException $erro) {
         echo json_encode([
             "sucesso" => false,
@@ -32,10 +31,11 @@ function criarCarteira(){
     }
 }
 
-function buscarCarteiras(){
+function buscarCarteiras()
+{
     global $conexao;
 
-    try{
+    try {
         $id_usuario = autenticar();
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
@@ -45,8 +45,7 @@ function buscarCarteiras(){
             "message" => "Carteiras encontradas",
             "carteiras" => $resultado
         ]);
-    }
-    catch(PDOException $e){
+    } catch (PDOException $e) {
         echo json_encode([
             "success" => false,
             "message" => "Não foi possível buscar as carteiras" . $e->getMessage()
@@ -54,7 +53,8 @@ function buscarCarteiras(){
     }
 }
 
-function itemInvestimento(){
+function itemInvestimento()
+{
     global $conexao;
 
     autenticar();
@@ -71,17 +71,14 @@ function itemInvestimento(){
 
     try {
         $posicoes = buscarPosicoesService($conexao, $idCarteira);
-            echo json_encode([
-                "sucesso" => true,
-                "posicoes" => $posicoes
-            ]);
-    } 
-    catch (PDOException $erro) {
+        echo json_encode([
+            "sucesso" => true,
+            "posicoes" => $posicoes
+        ]);
+    } catch (PDOException $erro) {
         echo json_encode([
             "sucesso" => false,
             "mensagem" => "Erro ao salvar: " . $erro->getMessage()
         ]);
     }
 }
-
-?>

@@ -1,13 +1,12 @@
 <?php
     // Confere se a carteira pertence mesmo ao usuário autenticado,
     // pra ninguém criar aporte recorrente em carteira de outra pessoa
-    function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $saldoLivre){
-        $sql = "INSERT INTO carteira (id_usuario, nome_carteira, tipo_carteira, saldo_livre_carteira) VALUES (?, ?, ?, ?) RETURNING id_carteira";
+    function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira){
+        $sql = "INSERT INTO carteira (id_usuario, nome_carteira, tipo_carteira) VALUES (?, ?, ?) RETURNING id_carteira";
         $insert = $conexao->prepare($sql);
         $insert->bindParam(1, $idUsuario);
         $insert->bindParam(2, $nomeCarteira);
         $insert->bindParam(3, $tipoCarteira);
-        $insert->bindParam(4, $saldoLivre);
         $insert->execute();
 
         $nova = $insert->fetch(PDO::FETCH_ASSOC);
