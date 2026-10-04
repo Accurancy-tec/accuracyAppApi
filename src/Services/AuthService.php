@@ -22,7 +22,7 @@ require_once __DIR__ . "/../Repositories/AuthRepository.php";
     }
 
     function loginUsuarioSiteService(PDO $conexao, $email){
-        return loginSite($conexao, $email);
+        return loginUsuarioSite($conexao, $email);
     }
 
     function findByEmailService(PDO $conexao, $email){
