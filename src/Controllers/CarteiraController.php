@@ -20,13 +20,13 @@ function criarCarteira()
 
         criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet);
         echo json_encode([
-            "sucesso" => true,
-            "mensagem" => "carteira cadastrado com sucesso"
+            "success" => true,
+            "message" => "carteira cadastrado com sucesso"
         ]);
     } catch (PDOException $erro) {
         echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Erro ao salvar: " . $erro->getMessage()
+            "success" => false,
+            "message" => "Erro ao salvar: " . $erro->getMessage()
         ]);
     }
 }
