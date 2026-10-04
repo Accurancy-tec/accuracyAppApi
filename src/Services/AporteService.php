@@ -40,3 +40,8 @@ function getIdAporteRecorrenteService(PDO $conexao, $idAporteRecorrente){
 function atualizarAporteRecorrenteService(PDO $conexao, $idAporteRecorrente, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $ativoFlagRecorrente){
     return atualizarAporteRecorrente($conexao, $idAporteRecorrente, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $ativoFlagRecorrente);
 }
+
+function excluirAporteService(PDO $conexao, $idAporte, $idUsuario)
+{
+    return excluirAporte($conexao, $idAporte, $idUsuario);
+}
