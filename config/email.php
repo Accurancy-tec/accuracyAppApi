@@ -14,6 +14,7 @@ function enviarCodigo($email, $codigo)
         $mail->isSMTP();
 
         $mail->Host = "smtp.gmail.com";
+
         $mail->SMTPAuth = true;
 
         $mail->Username = "accuracytcc@gmail.com";
@@ -22,6 +23,7 @@ function enviarCodigo($email, $codigo)
         $mail->Password = "hipt docm qhid zipj";
 
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+
         $mail->Port = 587;
 
         $mail->setFrom(
@@ -37,16 +39,24 @@ function enviarCodigo($email, $codigo)
 
         $mail->Body = "
             <h2>Verificação de e-mail</h2>
+
             <p>Olá!</p>
+
             <p>Seu código de verificação é:</p>
+
             <h1>$codigo</h1>
+
             <p>Esse código é válido por 10 minutos.</p>
         ";
 
         $mail->send();
 
         return true;
+
     } catch (Exception $erro) {
+
+        error_log("Erro ao enviar email: " . $erro->getMessage());
+
         return false;
     }
 }
