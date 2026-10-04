@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/../../config/email.php";
 require_once __DIR__. "/../Services/AuthService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 
