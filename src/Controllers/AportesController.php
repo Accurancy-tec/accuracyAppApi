@@ -41,7 +41,7 @@ function fazerAporte(){
     $simboloAtivo = $dados["ativo_aporte"] ?? null;
     $nomeAtivo = $dados["name_ativo"] ?? null;
     $categoriaAtivo = $dados["categoria_ativo"] ?? null;
-    $idWallet = 28;
+    $idWallet = $dados["id_carteira"] ?? null;
     $typeContribution = $dados['tipo_aporte'] ?? null;
     $contributionQuantity = $dados['quantidade_aporte'] ?? null;
     $contributionAmount = $dados['valor_aporte'] ?? null;
