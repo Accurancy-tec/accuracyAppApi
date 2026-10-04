@@ -44,7 +44,7 @@ final class BuscarPosicoesTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );

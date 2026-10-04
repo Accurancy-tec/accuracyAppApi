@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . "/../config/cors.php";
 header("Content-Type: application/json; charset=UTF-8");
 
 require "../database/conexao.php"; 
 include "../Authentication/Authentication.php";
 require "../config/cors.php";
 require_once "../Authentication/Authentication.php";
-require_once "../service/CarteiraService.php";
+require_once "../service/carteiraService.php";
 
 $dados = json_decode(file_get_contents("php://input"), true);
 
