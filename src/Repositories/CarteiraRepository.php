@@ -24,7 +24,7 @@
     }
 
     function getCarteirasDoUsuario(PDO $conexao, $id_usuario){
-        $sql = $conexao->prepare("SELECT nome_carteira, tipo_carteira FROM carteira WHERE id_usuario = :id_usuario ORDER BY id_carteira DESC");
+        $sql = $conexao->prepare("SELECT id_carteira, nome_carteira, tipo_carteira FROM carteira WHERE id_usuario = :id_usuario ORDER BY id_carteira DESC");
 
         $sql->execute([":id_usuario" => $id_usuario]);
 
