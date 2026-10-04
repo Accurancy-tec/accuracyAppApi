@@ -14,6 +14,10 @@ switch ($acao) {
         buscarAportesDoUsuario();
         break;
 
+    case 'excluir-aporte':
+        excluirAporte();
+        break;
+
     default:
 
         http_response_code(404);
