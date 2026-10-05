@@ -29,7 +29,6 @@ function buscarOuCriarAtivo(PDO $conexao, $simboloAtivo, $nomeAtivo, $categoriaA
 
     return $novo["id_ativo"];
 }
-<<<<<<< HEAD:src/Repositories/AtivoRepository.php
 
 function listarAtivos(PDO $conexao){
     $sql = $conexao->prepare(
@@ -46,6 +45,3 @@ function listarAtivos(PDO $conexao){
 
     return $ativos;
 }
-=======
-?>
->>>>>>> feat/investmentsRules:service/ativoService.php

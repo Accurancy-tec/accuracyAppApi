@@ -1,6 +1,4 @@
 <?php
-<<<<<<< HEAD:src/Controllers/AutomacaoController.php
-
 require_once __DIR__ . "/../../database/conexao.php";
 
 function calcularProximaExecucao($dataAtual, $frequencia)
@@ -208,10 +206,6 @@ function realizarAportesRecorrentes()
         ]);
     }
 }
-=======
-require_once __DIR__ . "/cotacaoService.php";
-require_once __DIR__ . "/posicaoService.php";
->>>>>>> feat/investmentsRules:service/automacaoCronService.php
 
 const CRON_FUSO = "America/Sao_Paulo";
 
@@ -702,7 +696,6 @@ function executarAutomacoesCron(PDO $conexao)
         "aportes_recorrentes" => $aportes
     ];
 }
-<<<<<<< HEAD:src/Controllers/AutomacaoController.php
 
 function executarAutomacoes()
 {
@@ -753,6 +746,3 @@ function executarAutomacoes()
         ]);
     }
 }
-=======
-?>
->>>>>>> feat/investmentsRules:service/automacaoCronService.php
