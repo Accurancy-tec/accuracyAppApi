@@ -4,6 +4,12 @@
  
 function atualizarPosicao(PDO $conexao, $idCarteira, $idAtivo, $tipoAporte, $quantidade, $valorTotal)
 {
+    // Dividendo é só dinheiro recebido: não entra nem sai cota da carteira.
+    // (Antes caía no bloco de "Venda" e dava erro de quantidade insuficiente.)
+    if ($tipoAporte === 'Dividendo') {
+        return true;
+    }
+
     if ($tipoAporte === 'Compra') {
 
         $precoUnitario = $quantidade > 0 ? $valorTotal / $quantidade : 0;
@@ -60,3 +66,4 @@ function buscarPosicoes(PDO $conexao, $idCarteira)
 
     return $consulta->fetchAll(PDO::FETCH_ASSOC);
 }
+?>
