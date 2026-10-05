@@ -1,4 +1,3 @@
-```php
 <?php
 
 use PHPUnit\Framework\TestCase;
@@ -79,7 +78,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -120,7 +119,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -131,7 +130,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             200
         );
@@ -173,7 +172,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -183,7 +182,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'venda',
+            'Venda',
             4,
             40
         );
@@ -219,7 +218,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -229,7 +228,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'venda',
+            'Venda',
             10,
             100
         );
@@ -266,7 +265,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -276,7 +275,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'venda',
+            'Venda',
             20,
             200
         );
@@ -293,7 +292,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'compra',
+            'Compra',
             10,
             100
         );
@@ -303,7 +302,7 @@ final class PosicaoServiceTest extends TestCase
             $this->conexao,
             $this->idCarteira,
             $this->idAtivo,
-            'venda',
+            'Venda',
             20,
             200
         );
@@ -335,6 +334,23 @@ final class PosicaoServiceTest extends TestCase
             10,
             $posicao['preco_medio_item']
         );
+    }
+
+    // Dividendo é só dinheiro recebido: não pode alterar nem exigir posição.
+    public function testDividendoNaoAlteraPosicao(): void
+    {
+        atualizarPosicao($this->conexao, $this->idCarteira, $this->idAtivo, 'Compra', 10, 100);
+
+        $resultado = atualizarPosicao($this->conexao, $this->idCarteira, $this->idAtivo, 'Dividendo', 0, 5);
+
+        $this->assertTrue($resultado);
+
+        $consulta = $this->conexao->prepare(
+            "SELECT quantidade_item FROM item_investimento WHERE id_carteira = ? AND id_ativo = ?"
+        );
+        $consulta->execute([$this->idCarteira, $this->idAtivo]);
+
+        $this->assertEquals(10, $consulta->fetchColumn());
     }
 }
 ?>

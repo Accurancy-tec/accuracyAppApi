@@ -1,14 +1,12 @@
 <?php
+require_once __DIR__ . "/../config/cors.php";
 header("Content-Type: application/json; charset=UTF-8");
  
 require "../database/conexao.php";
 require "../config/cors.php";
-require_once "../accuracyApi/src/Middleware/Authentication.php";
-require_once "../accuracyApi/src/Services/AtivoService.php";
-require_once "../accuracyApi/src/Services/CotacaoService.php";
-require_once "../accuracyApi/src/Services/PosicaoService.php";
-require_once "../accuracyApi/src/Services/CarteiraService.php";
-require_once "../accuracyApi/src/Services/AporteService.php";
+require_once "../Authentication/Authentication.php";
+require_once "../service/ativoService.php";
+require_once "../service/cotacaoService.php";
  
 autenticar();
  
@@ -34,8 +32,8 @@ try {
             exit;
         }
  
-        $idAtivo = buscarOuCriarAtivoService($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
-        salvarCotacaoService($conexao, $idAtivo, $dataCotacao, $precoAtivo);
+        $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
+        salvarCotacao($conexao, $idAtivo, $dataCotacao, $precoAtivo);
  
         echo json_encode([
             "sucesso" => true,
@@ -68,3 +66,4 @@ try {
         "mensagem" => "Erro: " . $erro->getMessage()
     ]);
 }
+?>
