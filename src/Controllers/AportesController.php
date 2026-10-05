@@ -39,9 +39,10 @@ function fazerAporte()
     $dados = json_decode(file_get_contents("php://input"), true);
 
     $simboloAtivo = $dados["ativo_aporte"] ?? null;
+    $idAtivo = $dados["id_ativo"] ?? null;
     $nomeAtivo = $dados["name_ativo"] ?? null;
     $categoriaAtivo = $dados["categoria_ativo"] ?? null;
-    $idWallet = $dados["id_carteira"] ?? null;
+    $idWallet = 28;
     $typeContribution = $dados['tipo_aporte'] ?? null;
     $contributionQuantity = $dados['quantidade_aporte'] ?? null;
     $contributionAmount = $dados['valor_aporte'] ?? null;

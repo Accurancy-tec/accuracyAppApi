@@ -15,6 +15,3 @@
     {
         return getUltimaCotacao($conexao, $idAtivo);
     }
-
-?>
- 
