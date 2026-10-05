@@ -90,13 +90,19 @@ function registrarUsuario()
 {
     global $conexao;
 
+    echo "1<br>";
+
     $dados = json_decode(file_get_contents("php://input"), true);
+
+    echo "2<br>";
 
     $nome = $dados['nome_usuario'];
     $email = $dados['email_usuario'];
     $senha = $dados['senha_usuario'];
     $cpf = $dados['cpf_usuario'];
     $telefone = $dados['telefone_usuario'];
+
+    echo "3<br>";
 
     if (empty($nome) || empty($email) || empty($senha) || empty($cpf) || empty($telefone)) {
         echo json_encode([
@@ -105,11 +111,27 @@ function registrarUsuario()
         ]);
         exit;
     }
+
+    echo "4<br>";
+
     $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
 
-    $usuario = registrarNovoUsuarioService($conexao, $nome, $email, $senhaHash, $cpf, $telefone);
+    echo "5<br>";
+
+    $usuario = registrarNovoUsuarioService(
+        $conexao,
+        $nome,
+        $email,
+        $senhaHash,
+        $cpf,
+        $telefone
+    );
+
+    echo "6<br>";
 
     $idUsuario = $usuario['id_usuario'];
+
+    echo "7<br>";
 
     $codigo = str_pad(
         random_int(0, 999999),
@@ -118,42 +140,38 @@ function registrarUsuario()
         STR_PAD_LEFT
     );
 
+    echo "8<br>";
+
     $codigoHash = password_hash(
         $codigo,
         PASSWORD_DEFAULT
     );
+
+    echo "9<br>";
 
     $expiraEm = date(
         "Y-m-d H:i:s",
         time() + (10 * 60)
     );
 
-    gerarTokenUsuario($conexao, $idUsuario, $codigoHash, $expiraEm);
+    echo "10<br>";
+
+    gerarTokenUsuario(
+        $conexao,
+        $idUsuario,
+        $codigoHash,
+        $expiraEm
+    );
+
+    echo "11<br>";
 
     $enviado = enviarCodigo($email, $codigo);
 
-    if (is_array($enviado)) {
+    echo "12<br>";
 
-        echo json_encode([
-            "status" => $enviado["sucesso"] ? "sucesso" : "erro",
-            "mensagem" => $enviado["sucesso"]
-                ? "Cadastro realizado. Código de verificação enviado."
-                : "Erro ao enviar email.",
-            "debug_smtp" => $enviado["debug"] ?? null,
-            "erro_smtp" => $enviado["erro"] ?? null,
-            "id_usuario" => $idUsuario
-        ]);
+    var_dump($enviado);
 
-        exit;
-    }
-
-    if (!$enviado) {
-        echo json_encode([
-            "status" => "erro",
-            "mensagem" => "Não foi possível enviar o código de verificação."
-        ]);
-        exit;
-    }
+    exit;
 }
 
 function refresh()
