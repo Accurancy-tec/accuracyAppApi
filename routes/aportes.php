@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/AportesController.php';
+require_once __DIR__ . '/../src/Controllers/HistoricoaportesController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -16,6 +17,10 @@ switch ($acao) {
 
     case 'excluir-aporte':
         excluirAporte();
+        break;
+
+    case 'buscar-historico-aportes':
+        buscarHistoricoAportes();
         break;
 
     default:
