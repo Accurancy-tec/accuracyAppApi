@@ -42,13 +42,21 @@ function fazerAporte()
     $idAtivo = $dados["id_ativo"] ?? null;
     $nomeAtivo = $dados["name_ativo"] ?? null;
     $categoriaAtivo = $dados["categoria_ativo"] ?? null;
-    $idWallet = 28;
+    $idWallet = $dados["id_carteira"] ?? null;
     $typeContribution = $dados['tipo_aporte'] ?? null;
     $contributionQuantity = $dados['quantidade_aporte'] ?? null;
     $contributionAmount = $dados['valor_aporte'] ?? null;
     $contributionRecurrence = $dados['recorrencia_aporte'];
     $contributionNotes = $dados['observacao_aporte'] ?? null;
     $contributionDate = date("Y-m-d");
+
+    $idUsuario = autenticar();
+
+    if (!$idWallet || !carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
+        http_response_code(403);
+        echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida."]);
+        exit;
+    }
 
     try {
         $conexao->beginTransaction();
