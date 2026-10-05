@@ -9,21 +9,27 @@ function enviarCodigo($email, $codigo)
 {
     $mail = new PHPMailer(true);
 
+    $debug = "";
+
     try {
 
         $mail->isSMTP();
 
-        $mail->Host = "smtp.gmail.com";
+        $mail->SMTPDebug = 2;
 
+        $mail->Debugoutput = function ($str, $level) use (&$debug) {
+            $debug .= $str . "\n";
+        };
+
+        $mail->Host = "smtp.gmail.com";
         $mail->SMTPAuth = true;
 
         $mail->Username = "accuracytcc@gmail.com";
 
-        // COLOQUE SUA NOVA SENHA DE APP AQUI
+        // SENHA DE APP
         $mail->Password = "hipt docm qhid zipj";
 
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-
         $mail->Port = 587;
 
         $mail->setFrom(
@@ -51,12 +57,17 @@ function enviarCodigo($email, $codigo)
 
         $mail->send();
 
-        return true;
+        return [
+            "sucesso" => true,
+            "debug" => $debug
+        ];
+
     } catch (\Exception $erro) {
 
         return [
             "sucesso" => false,
-            "erro" => $erro->getMessage()
+            "erro" => $erro->getMessage(),
+            "debug" => $debug
         ];
     }
 }

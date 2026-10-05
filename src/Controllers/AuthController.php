@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . "/../../config/email.php";
-require_once __DIR__. "/../Services/AuthService.php";
+require_once __DIR__ . "/../Services/AuthService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 
 function login()
@@ -130,6 +130,21 @@ function registrarUsuario()
 
     $enviado = enviarCodigo($email, $codigo);
 
+    if (is_array($enviado)) {
+
+        echo json_encode([
+            "status" => $enviado["sucesso"] ? "sucesso" : "erro",
+            "mensagem" => $enviado["sucesso"]
+                ? "Cadastro realizado. Código de verificação enviado."
+                : "Erro ao enviar email.",
+            "debug_smtp" => $enviado["debug"] ?? null,
+            "erro_smtp" => $enviado["erro"] ?? null,
+            "id_usuario" => $idUsuario
+        ]);
+
+        exit;
+    }
+
     if (!$enviado) {
         echo json_encode([
             "status" => "erro",
@@ -137,12 +152,6 @@ function registrarUsuario()
         ]);
         exit;
     }
-
-    echo json_encode([
-        "status" => "sucesso",
-        "mensagem" => "Cadastro realizado. Código de verificação enviado.",
-        "id_usuario" => $idUsuario
-    ]);
 }
 
 function refresh()
@@ -224,7 +233,7 @@ function loginSite()
     header("Content-Type: application/json; charset=UTF-8");
 
     require_once __DIR__ . "/../Middleware/Authentication.php";
-   $conexao = require_once __DIR__ . "/../../database/conexao.php";
+    $conexao = require_once __DIR__ . "/../../database/conexao.php";
 
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         echo json_encode([
@@ -437,7 +446,7 @@ function verifyEmail()
             exit;
         }
 
-        $dados = json_decode(file_get_contents("php://input"),true);
+        $dados = json_decode(file_get_contents("php://input"), true);
 
         $email = trim($dados["email_usuario"] ?? "");
         $codigo = trim($dados["codigo"] ?? "");
