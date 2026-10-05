@@ -45,11 +45,13 @@ function enviarCodigo($email, $codigo)
         error_log("ERRO RESEND CURL: " . $erro);
         return false;
     }
-
     if ($status < 200 || $status >= 300) {
         error_log("ERRO RESEND HTTP $status: " . $resposta);
+
         return false;
     }
+
+    error_log("RESEND SUCESSO: " . $resposta);
 
     return true;
 }
