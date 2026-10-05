@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . "/../Repositories/AuthRepository.php";
 
-    function loginService(PDO $conexao, $email){
+    function loginUsuarioService(PDO $conexao, $email){
         return loginUsuario($conexao, $email);
     }
 
