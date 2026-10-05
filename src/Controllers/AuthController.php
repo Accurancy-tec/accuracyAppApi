@@ -5,6 +5,8 @@ require_once __DIR__ . "/../../database/conexao.php";
 
 function login()
 {
+    global $conexao;
+
     header("Content-Type: application/json; charset=UTF-8");
 
     require_once __DIR__ . "/../Middleware/Authentication.php";
@@ -39,7 +41,7 @@ function login()
         exit;
     }
 
-    $usuario = loginService($conexao, $email);
+    $usuario = loginUsuarioService($conexao, $email);
 
     if (!$usuario) {
         echo json_encode([
