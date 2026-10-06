@@ -103,7 +103,7 @@ function evolucaoCarteira()
                         GREATEST(
                             COALESCE(qtd.quantidade, 0),
                             0
-                        ) * COALESCE(cot.preco, 0)
+                        ) * COALESCE(cot.preco, apr.preco, 0)
                     ),
                     0
                 ) AS valor
@@ -139,6 +139,22 @@ function evolucaoCarteira()
                 ORDER BY cota.data_cotacao DESC
                 LIMIT 1
             ) cot ON TRUE
+            -- Sem cotação (Cripto, Renda Fixa, Internacional ou data anterior à
+            -- 1ª cotação): usa o preço unitário do último aporte até aquele dia,
+            -- em vez de contar o ativo como R$ 0 no gráfico.
+            LEFT JOIN LATERAL (
+                SELECT
+                    ult.valor_aporte / NULLIF(ult.quantidade_aporte, 0) AS preco
+                FROM aporte ult
+                WHERE ult.id_carteira = ativo.id_carteira
+                  AND ult.id_ativo = ativo.id_ativo
+                  AND ult.status_aporte = 'Concluída'
+                  AND ult.tipo_aporte IN ('Compra', 'Venda')
+                  AND ult.quantidade_aporte > 0
+                  AND ult.data_aporte <= d.data
+                ORDER BY ult.data_aporte DESC, ult.id_aporte DESC
+                LIMIT 1
+            ) apr ON TRUE
             GROUP BY d.data
             ORDER BY d.data ASC
         ";
