@@ -128,13 +128,16 @@ function distribuicaoCarteira()
         $sql = "
             SELECT
                 a.categoria_ativo AS categoria,
-                SUM(i.quantidade_item * cot.preco) AS valor
+                SUM(i.quantidade_item * COALESCE(cot.preco, i.preco_medio_item)) AS valor
             FROM item_investimento i
             INNER JOIN carteira c
                 ON c.id_carteira = i.id_carteira
             INNER JOIN ativo a
                 ON a.id_ativo = i.id_ativo
-            INNER JOIN LATERAL (
+            -- LEFT: ativo sem cotação (Cripto, Renda Fixa, Internacional) não pode
+            -- sumir do donut; nesse caso vale o preço médio pago (mesma regra do
+            -- carteiraResumo.php: não inventa lucro nem prejuízo).
+            LEFT JOIN LATERAL (
                 SELECT
                     cota.preco_fechamento_cotacao AS preco
                 FROM cotacao_ativo cota
@@ -146,7 +149,7 @@ function distribuicaoCarteira()
               AND i.quantidade_item > 0
               $condicaoCarteira
             GROUP BY a.categoria_ativo
-            HAVING SUM(i.quantidade_item * cot.preco) > 0
+            HAVING SUM(i.quantidade_item * COALESCE(cot.preco, i.preco_medio_item)) > 0
             ORDER BY valor DESC
         ";
 
