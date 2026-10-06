@@ -91,7 +91,9 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
     return $stmt->rowCount() > 0;
 }
 
-function listarAportesUsuario(PDO $conexao, $id_usuario){
+function listarAportesUsuario(PDO $conexao, $id_usuario, $limite = 200){
+    $limite = max(1, (int) $limite);
+
     $sql = $conexao->prepare("
         SELECT
             a.id_aporte,
@@ -107,7 +109,7 @@ function listarAportesUsuario(PDO $conexao, $id_usuario){
         INNER JOIN Ativo at ON at.id_ativo = a.id_ativo
         WHERE c.id_usuario = ?
         ORDER BY a.id_aporte DESC
-        LIMIT 4
+        LIMIT $limite
     ");
 
     $sql->execute([$id_usuario]);

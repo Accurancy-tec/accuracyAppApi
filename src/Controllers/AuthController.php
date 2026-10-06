@@ -2,15 +2,13 @@
 require_once __DIR__ . "/../../config/email.php";
 require_once __DIR__ . "/../Services/AuthService.php";
 require_once __DIR__ . "/../../database/conexao.php";
+require_once __DIR__ . "/../Middleware/Authentication.php";
 
 function login()
 {
     global $conexao;
 
     header("Content-Type: application/json; charset=UTF-8");
-
-    require_once __DIR__ . "/../Middleware/Authentication.php";
-    require_once __DIR__ . "/../../database/conexao.php";
 
     if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         echo json_encode([
