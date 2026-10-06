@@ -18,7 +18,10 @@ function buscarAportesDoUsuario()
     try {
         $id_usuario = autenticar();
 
-        $aportes = listarAportesUsuarioService($conexao, $id_usuario);
+        $limite = isset($_GET["limite"]) ? (int) $_GET["limite"] : 200;
+        $limite = max(1, min($limite, 200));
+
+        $aportes = listarAportesUsuarioService($conexao, $id_usuario, $limite);
 
         echo json_encode([
             "sucesso" => true,
@@ -35,6 +38,8 @@ function buscarAportesDoUsuario()
 function fazerAporte()
 {
     global $conexao;
+
+    $idUsuario = autenticar();
 
     $dados = json_decode(file_get_contents("php://input"), true);
 
@@ -59,6 +64,23 @@ function fazerAporte()
     }
 
     try {
+        if ($idWallet) {
+            if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
+                http_response_code(403);
+                echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida."]);
+                exit;
+            }
+        } else {
+            // O app ainda não envia id_carteira: usa a carteira mais antiga do
+            // usuário (a lista vem do mais novo pro mais antigo) e, se ele não
+            // tiver nenhuma, cria a "Carteira principal".
+            $carteirasDoUsuario = getCarteirasDoUsuarioService($conexao, $idUsuario);
+
+            $idWallet = $carteirasDoUsuario
+                ? end($carteirasDoUsuario)["id_carteira"]
+                : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");
+        }
+
         $conexao->beginTransaction();
 
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
@@ -77,6 +99,10 @@ function fazerAporte()
             "mensagem" => "Aporte cadastrado com sucesso"
         ]);
     } catch (Throwable $erro) {
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+
         echo json_encode([
             "sucesso" => false,
             "mensagem" => "Erro ao salvar: " . $erro->getMessage()
