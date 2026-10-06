@@ -143,7 +143,7 @@ function registrarUsuario()
         $expiraEm
     );
 
-    $enviado = enviarCodigo($email, $codigo);
+    $enviado = enviarCodigoBrevo($email, $codigo);
 
     if (!$enviado) {
         echo json_encode([
@@ -393,7 +393,7 @@ function resendVerification()
 
         $conexao->commit();
 
-        $enviado = enviarCodigo(
+        $enviado = enviarCodigoBrevo(
             $email,
             $codigo
         );
