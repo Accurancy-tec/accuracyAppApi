@@ -62,6 +62,7 @@ function enviarCodigoBrevo($email, $codigo)
 
     if (empty($apiKey) || empty($remetente)) {
         error_log("BREVO_API_KEY ou BREVO_REMETENTE não configurada.");
+        $GLOBALS["erro_email"] = "variaveis vazias";   // linha nova
         return false;
     }
 
@@ -100,11 +101,13 @@ function enviarCodigoBrevo($email, $codigo)
 
     if ($erro) {
         error_log("ERRO BREVO CURL: " . $erro);
+        $GLOBALS["erro_email"] = "CURL: " . $erro;   // linha nova
         return false;
     }
 
     if ($status < 200 || $status >= 300) {
         error_log("ERRO BREVO HTTP $status: " . $resposta);
+        $GLOBALS["erro_email"] = "HTTP $status: " . $resposta;   // linha nova
         return false;
     }
 
