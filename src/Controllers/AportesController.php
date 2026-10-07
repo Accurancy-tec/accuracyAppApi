@@ -22,7 +22,7 @@ function buscarAportesDoUsuario()
 
         echo json_encode([
             "sucesso" => true,
-            "ativos" => $aportes
+            "aportes" => $aportes
         ]);
     } catch (PDOException $e) {
         echo json_encode([
