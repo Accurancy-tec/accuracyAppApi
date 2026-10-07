@@ -91,7 +91,9 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
     return $stmt->rowCount() > 0;
 }
 
-function listarAportesUsuario(PDO $conexao, $id_usuario){
+function listarAportesUsuario(PDO $conexao, $id_usuario, $limite = 200){
+    $limite = max(1, (int) $limite);
+
     $sql = $conexao->prepare("
         SELECT
             a.id_aporte,
@@ -107,7 +109,7 @@ function listarAportesUsuario(PDO $conexao, $id_usuario){
         INNER JOIN Ativo at ON at.id_ativo = a.id_ativo
         WHERE c.id_usuario = ?
         ORDER BY a.id_aporte DESC
-        LIMIT 4
+        LIMIT $limite
     ");
 
     $sql->execute([$id_usuario]);
@@ -162,20 +164,192 @@ function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorre
     return $update;
 
 }
+
 function excluirAporteRepository(PDO $conexao, $idAporte, $idUsuario)
 {
+    try {
+
+        $conexao->beginTransaction();
+
+        // 1. Busca o aporte e confirma que ele pertence ao usuário
+        $sqlAporte = "
+            SELECT
+                a.id_aporte,
+                a.id_carteira,
+                a.id_ativo
+            FROM aporte a
+            INNER JOIN carteira c
+                ON c.id_carteira = a.id_carteira
+            WHERE a.id_aporte = ?
+              AND c.id_usuario = ?
+            FOR UPDATE
+        ";
+
+        $stmtAporte = $conexao->prepare($sqlAporte);
+        $stmtAporte->execute([$idAporte, $idUsuario]);
+
+        $aporte = $stmtAporte->fetch(PDO::FETCH_ASSOC);
+
+        if (!$aporte) {
+            $conexao->rollBack();
+            return false;
+        }
+
+        $idCarteira = (int) $aporte["id_carteira"];
+        $idAtivo = (int) $aporte["id_ativo"];
+
+        // 2. Exclui o aporte
+        $sqlDelete = "
+            DELETE FROM aporte
+            WHERE id_aporte = ?
+        ";
+
+        $stmtDelete = $conexao->prepare($sqlDelete);
+        $stmtDelete->execute([$idAporte]);
+
+        // 3. Recalcula a posição desse ativo nessa carteira
+        recalcularPosicaoAposExclusao(
+            $conexao,
+            $idCarteira,
+            $idAtivo
+        );
+
+        // 4. Confirma tudo
+        $conexao->commit();
+
+        return true;
+
+    } catch (Throwable $erro) {
+
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+
+        throw $erro;
+    }
+}
+function recalcularPosicaoAposExclusao(PDO $conexao, $idCarteira, $idAtivo)
+{
+    /*
+     * Recalcula a posição usando todos os aportes que
+     * continuam cadastrados para essa carteira e ativo.
+     *
+     * Compra    -> aumenta quantidade e valor investido
+     * Venda     -> diminui quantidade
+     * Dividendo -> não altera quantidade
+     */
+
     $sql = "
-        DELETE FROM aporte
-        WHERE id_aporte = ?
-        AND id_carteira IN (
-            SELECT id_carteira
-            FROM carteira
-            WHERE id_usuario = ?
-        )
+        SELECT
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN tipo_aporte = 'Compra'
+                        THEN quantidade_aporte
+                        WHEN tipo_aporte = 'Venda'
+                        THEN -quantidade_aporte
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS quantidade,
+
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN tipo_aporte = 'Compra'
+                        THEN valor_aporte
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS valor_compras
+        FROM aporte
+        WHERE id_carteira = ?
+          AND id_ativo = ?
     ";
 
     $stmt = $conexao->prepare($sql);
-    $stmt->execute([$idAporte, $idUsuario]);
+    $stmt->execute([$idCarteira, $idAtivo]);
 
-    return $stmt->rowCount() > 0;
+    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $quantidade = (float) ($resultado["quantidade"] ?? 0);
+    $valorCompras = (float) ($resultado["valor_compras"] ?? 0);
+
+    // Não pode existir posição negativa
+    if ($quantidade < 0) {
+        $quantidade = 0;
+    }
+
+    // Se não existe mais quantidade desse ativo,
+    // remove a posição da carteira.
+    if ($quantidade <= 0) {
+
+        $sqlDeletePosicao = "
+            DELETE FROM item_investimento
+            WHERE id_carteira = ?
+              AND id_ativo = ?
+        ";
+
+        $stmtDeletePosicao = $conexao->prepare($sqlDeletePosicao);
+        $stmtDeletePosicao->execute([
+            $idCarteira,
+            $idAtivo
+        ]);
+
+        return;
+    }
+
+    // Calcula novamente o preço médio das compras restantes
+    $precoMedio = $valorCompras / $quantidade;
+
+    // Atualiza a posição existente
+    $sqlUpdate = "
+        UPDATE item_investimento
+        SET
+            quantidade_item = ?,
+            preco_medio_item = ?,
+            atualizado_em = NOW()
+        WHERE id_carteira = ?
+          AND id_ativo = ?
+    ";
+
+    $stmtUpdate = $conexao->prepare($sqlUpdate);
+    $stmtUpdate->execute([
+        $quantidade,
+        $precoMedio,
+        $idCarteira,
+        $idAtivo
+    ]);
+
+    // Caso por algum motivo a posição não exista,
+    // cria novamente a partir dos aportes restantes.
+    if ($stmtUpdate->rowCount() === 0) {
+
+        $sqlInsert = "
+            INSERT INTO item_investimento
+                (
+                    id_carteira,
+                    id_ativo,
+                    quantidade_item,
+                    preco_medio_item,
+                    atualizado_em
+                )
+            VALUES (?, ?, ?, ?, NOW())
+            ON CONFLICT (id_carteira, id_ativo)
+            DO UPDATE SET
+                quantidade_item = EXCLUDED.quantidade_item,
+                preco_medio_item = EXCLUDED.preco_medio_item,
+                atualizado_em = NOW()
+        ";
+
+        $stmtInsert = $conexao->prepare($sqlInsert);
+        $stmtInsert->execute([
+            $idCarteira,
+            $idAtivo,
+            $quantidade,
+            $precoMedio
+        ]);
+    }
 }

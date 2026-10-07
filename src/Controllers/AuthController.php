@@ -141,15 +141,16 @@ function registrarUsuario()
         $expiraEm
     );
 
-    $enviado = enviarCodigo($email, $codigo);
+    $enviado = enviarCodigoBrevo($email, $codigo);
 
     if (!$enviado) {
         echo json_encode([
             "status" => "erro",
-            "mensagem" => "Não foi possível enviar o código de verificação."
+            "mensagem" => "Não foi possível enviar o código de verificação.",
+            "detalhe" => $GLOBALS["erro_email"] ?? "sem detalhe"
         ]);
         exit;
-    }
+    } 
 
     echo json_encode([
         "status" => "sucesso",
@@ -391,7 +392,7 @@ function resendVerification()
 
         $conexao->commit();
 
-        $enviado = enviarCodigo(
+        $enviado = enviarCodigoBrevo(
             $email,
             $codigo
         );
