@@ -17,14 +17,26 @@ function buscarAportesDoUsuario()
 
     try {
         $id_usuario = autenticar();
+        $idCarteira = $_GET["id_carteira"] ?? null;
+
+        if ($idCarteira === null) {
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "ID da carteira não informado"
+            ]);
+            exit;
+        }
+
+        $idCarteira = (int) $idCarteira;
 
         $limite = isset($_GET["limite"]) ? (int) $_GET["limite"] : 200;
         $limite = max(1, min($limite, 200));
 
-        $aportes = listarAportesUsuarioService($conexao, $id_usuario, $limite);
+        $aportes = listarAportesUsuarioService($conexao, $id_usuario, $idCarteira, $limite);
 
         echo json_encode([
             "sucesso" => true,
+            "quantidade" => count($aportes),
             "aportes" => $aportes
         ]);
     } catch (PDOException $e) {
@@ -57,17 +69,17 @@ function fazerAporte()
 
     $idUsuario = autenticar();
 
-    if (!$idWallet || !carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
+    /*if (!$idWallet || !carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
         http_response_code(403);
-        echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida."]);
+        echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida @."]);
         exit;
-    }
+    }*/
 
     try {
         if ($idWallet) {
             if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
                 http_response_code(403);
-                echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida."]);
+                echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida !."]);
                 exit;
             }
         } else {

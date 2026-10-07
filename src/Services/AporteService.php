@@ -7,9 +7,9 @@ function criarAporteService(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte,
     return criarAporte($conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte);
 }
 
-function listarAportesUsuarioService(PDO $conexao, $id_usuario, $limite = 200)
+function listarAportesUsuarioService(PDO $conexao, $id_usuario, $id_carteira, $limite = 200)
 {
-    return listarAportesUsuario($conexao, $id_usuario, $limite);
+    return listarAportesUsuario($conexao, $id_usuario, $id_carteira, $limite);
 }
 
 function criarAporteRecorrenteService(PDO $conexao, $idCarteira, $idAtivo, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $proximaExecucaoRecorrente)
