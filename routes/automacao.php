@@ -14,6 +14,10 @@ switch ($acao) {
         executarAutomacoes();
         break;
 
+    case "health-check":
+        healthCheck();
+        break;
+        
     default:
         http_response_code(404);
 
