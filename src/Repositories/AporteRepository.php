@@ -91,7 +91,7 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
     return $stmt->rowCount() > 0;
 }
 
-function listarAportesUsuario(PDO $conexao, $id_usuario, $limite = 200){
+function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite = 200){
     $limite = max(1, (int) $limite);
 
     $sql = $conexao->prepare("
@@ -107,12 +107,13 @@ function listarAportesUsuario(PDO $conexao, $id_usuario, $limite = 200){
         FROM Aporte a
         INNER JOIN Carteira c ON c.id_carteira = a.id_carteira
         INNER JOIN Ativo at ON at.id_ativo = a.id_ativo
-        WHERE c.id_usuario = ?
+        WHERE c.id_usuario = :id_usuario
+        AND c.id_carteira = :id_carteira
         ORDER BY a.id_aporte DESC
         LIMIT $limite
     ");
 
-    $sql->execute([$id_usuario]);
+    $sql->execute([":id_usuario" => $id_usuario, ":id_carteira" => $id_carteira]);
 
     return $sql->fetchAll(PDO::FETCH_ASSOC);
 
