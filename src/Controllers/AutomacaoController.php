@@ -1,5 +1,8 @@
 <?php
 require_once __DIR__ . "/../../database/conexao.php";
+require_once __DIR__ . "/../Services/CotacaoService.php";
+require_once __DIR__ . "/../Services/AporteService.php";
+require_once __DIR__ . "/../Services/PosicaoService.php";
 
 function calcularProximaExecucao($dataAtual, $frequencia)
 {
