@@ -13,4 +13,4 @@ jobs:
       - name: Ping na API
         run: |
           curl --fail --silent --show-error \
-            https://accuracyappapi.onrender.com/tests/health.php
+            https://accuracyappapi.onrender.com/automacao/health-check
