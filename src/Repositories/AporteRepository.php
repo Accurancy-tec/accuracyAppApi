@@ -1,7 +1,11 @@
 <?php
 // Confere se a carteira pertence mesmo ao usuário autenticado,
 // pra ninguém criar aporte recorrente em carteira de outra pessoa
-function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte){
+
+use PhpParser\Node\Stmt\Switch_;
+
+function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte)
+{
 
     $sql = $conexao->prepare("INSERT INTO aporte (
     id_carteira, 
@@ -13,7 +17,7 @@ function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quant
     observacao_aporte,
     data_aporte) 
     VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)"
-    ); 
+    );
 
     $sql->execute([
         ':id_carteira' => $id_carteira,
@@ -27,7 +31,7 @@ function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quant
     ]);
 
     return $sql->fetchAll(PDO::FETCH_ASSOC);
-   
+
 }
 // Cria um novo aporte recorrente pra uma carteira/ativo
 function criarAporteRecorrente(PDO $conexao, $idCarteira, $idAtivo, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $proximaExecucaoRecorrente)
@@ -37,7 +41,7 @@ function criarAporteRecorrente(PDO $conexao, $idCarteira, $idAtivo, $valorRecorr
             VALUES
                 (:carteira, :ativo, :valor, :frequencia, :dia, 1, :proxima)
             RETURNING id_aporte_recorrente";
- 
+
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(':carteira', $idCarteira);
     $stmt->bindParam(':ativo', $idAtivo);
@@ -46,12 +50,12 @@ function criarAporteRecorrente(PDO $conexao, $idCarteira, $idAtivo, $valorRecorr
     $stmt->bindParam(':dia', $diaReferenciaRecorrente);
     $stmt->bindParam(':proxima', $proximaExecucaoRecorrente);
     $stmt->execute();
- 
+
     $novo = $stmt->fetch(PDO::FETCH_ASSOC);
- 
+
     return $novo["id_aporte_recorrente"];
 }
- 
+
 // Lista os aportes recorrentes de uma carteira
 function listarAporteRecorrente(PDO $conexao, $idCarteira)
 {
@@ -62,14 +66,14 @@ function listarAporteRecorrente(PDO $conexao, $idCarteira)
             JOIN ativo a ON a.id_ativo = r.id_ativo
             WHERE r.id_carteira = :carteira
             ORDER BY r.criado_em DESC";
- 
+
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(':carteira', $idCarteira);
     $stmt->execute();
- 
+
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
- 
+
 // Atualiza valor, frequência, dia de referência e status (ativo/inativo) de um aporte recorrente
 function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorRecorrente, $frequenciaRecorrente, $diaReferenciaRecorrente, $ativoFlagRecorrente)
 {
@@ -79,7 +83,7 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
                 dia_referencia_recorrente = :dia,
                 ativo_flag_recorrente = :ativoFlag
             WHERE id_aporte_recorrente = :id";
- 
+
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(':valor', $valorRecorrente);
     $stmt->bindParam(':frequencia', $frequenciaRecorrente);
@@ -87,11 +91,12 @@ function atualizarAporteRecorrente(PDO $conexao, $idAporteRecorrente, $valorReco
     $stmt->bindParam(':ativoFlag', $ativoFlagRecorrente, PDO::PARAM_INT);
     $stmt->bindParam(':id', $idAporteRecorrente);
     $stmt->execute();
- 
+
     return $stmt->rowCount() > 0;
 }
 
-function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite = 200){
+function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite = 200)
+{
     $limite = max(1, (int) $limite);
 
     $sql = $conexao->prepare("
@@ -117,10 +122,11 @@ function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite =
 
     return $sql->fetchAll(PDO::FETCH_ASSOC);
 
-    
+
 }
 
-function getIdAporteRecorrente(PDO $conexao, $idAporteRecorrente){
+function getIdAporteRecorrente(PDO $conexao, $idAporteRecorrente)
+{
     $sql = "SELECT id_carteira FROM aporte_recorrente WHERE id_aporte_recorrente = ? ";
 
     $stmt = $conexao->prepare($sql);
@@ -129,7 +135,8 @@ function getIdAporteRecorrente(PDO $conexao, $idAporteRecorrente){
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-function getAportesRecorrentes(PDO $conexao){
+function getAportesRecorrentes(PDO $conexao)
+{
     $sql = "
         SELECT
             id_aporte_recorrente,
@@ -150,8 +157,9 @@ function getAportesRecorrentes(PDO $conexao){
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorrente){
-    
+function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorrente)
+{
+
     // Atualiza o aporte recorrente
     $sqlUpdate = "UPDATE aporte_recorrente SET proxima_execucao_recorrente = :proxima WHERE id_aporte_recorrente = :id";
 
@@ -353,4 +361,93 @@ function recalcularPosicaoAposExclusao(PDO $conexao, $idCarteira, $idAtivo)
             $precoMedio
         ]);
     }
+}
+
+function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)
+{
+    switch ($Choise) {
+
+        case 'Mais caros':
+            $sql = "SELECT
+                        a.id_carteira,
+                        atv.simbolo_ativo   AS ativo_aporte,
+                        atv.nome_ativo      AS name_ativo,
+                        atv.categoria_ativo AS categoria_ativo,
+                        a.quantidade_aporte AS quantidade_aporte,
+                        a.valor_aporte      AS valor_aporte,
+                        a.tipo_aporte       AS tipo_aporte,
+                        a.recorrencia_aporte AS recorrencia_aporte
+                    FROM Aporte a
+                    JOIN Carteira c ON c.id_carteira = a.id_carteira
+                    JOIN Ativo atv  ON atv.id_ativo = a.id_ativo
+                    WHERE c.id_usuario = ?
+                      AND a.status_aporte = 'Concluída'
+                      AND a.tipo_aporte = 'Compra'
+                    ORDER BY a.valor_aporte DESC
+                    LIMIT 4";
+                    
+            break;
+
+        case 'Mais lucrativos':
+            $sql = "SELECT
+                MIN(ii.id_carteira)  AS id_carteira,
+                atv.simbolo_ativo    AS ativo_aporte,
+                atv.nome_ativo       AS name_ativo,
+                atv.categoria_ativo  AS categoria_ativo,
+                SUM(ii.quantidade_item) AS quantidade_aporte,
+                SUM(ii.quantidade_item *
+                    (cot.preco_fechamento_cotacao - ii.preco_medio_item)) AS valor_aporte,
+                'Lucro'              AS tipo_aporte,
+                ''                   AS recorrencia_aporte
+            FROM Item_Investimento ii
+            JOIN Carteira c ON c.id_carteira = ii.id_carteira
+            JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
+            JOIN Cotacao_Ativo cot ON cot.id_ativo = ii.id_ativo
+             AND cot.data_cotacao = (
+                 SELECT MAX(c2.data_cotacao)
+                 FROM Cotacao_Ativo c2
+                 WHERE c2.id_ativo = ii.id_ativo)
+            WHERE c.id_usuario = ?
+            GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo
+            HAVING SUM(ii.quantidade_item * (cot.preco_fechamento_cotacao - ii.preco_medio_item)) > 0
+            ORDER BY valor_aporte DESC
+            LIMIT 4";
+
+            break;
+
+        case 'Maiores perdas':
+            $sql = "SELECT
+                MIN(ii.id_carteira)  AS id_carteira,
+                atv.simbolo_ativo    AS ativo_aporte,
+                atv.nome_ativo       AS name_ativo,
+                atv.categoria_ativo  AS categoria_ativo,
+                SUM(ii.quantidade_item) AS quantidade_aporte,
+                SUM(ii.quantidade_item *
+                    (cot.preco_fechamento_cotacao - ii.preco_medio_item)) AS valor_aporte,
+                'Perda'              AS tipo_aporte,
+                ''                   AS recorrencia_aporte
+            FROM Item_Investimento ii
+            JOIN Carteira c ON c.id_carteira = ii.id_carteira
+            JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
+            JOIN Cotacao_Ativo cot ON cot.id_ativo = ii.id_ativo
+             AND cot.data_cotacao = (
+                 SELECT MAX(c2.data_cotacao)
+                 FROM Cotacao_Ativo c2
+                 WHERE c2.id_ativo = ii.id_ativo)
+            WHERE c.id_usuario = ?
+            GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo
+            HAVING SUM(ii.quantidade_item * (cot.preco_fechamento_cotacao - ii.preco_medio_item)) < 0
+            ORDER BY valor_aporte ASC
+            LIMIT 4";
+
+            break;
+
+        default:
+            throw new InvalidArgumentException("Filtro inválido: " . $Choise);
+    }
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$idUsuario]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
