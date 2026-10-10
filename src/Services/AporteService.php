@@ -45,3 +45,8 @@ function excluirAporteService(PDO $conexao, $idAporte, $idUsuario)
 {
     return excluirAporteRepository($conexao, $idAporte, $idUsuario);
 }
+
+function listarAportesService(PDO $conexao,$idUsuario,$Choise)
+{
+    return listarAportesDestaque($conexao,$idUsuario,$Choise);
+}
