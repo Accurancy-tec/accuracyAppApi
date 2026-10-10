@@ -135,8 +135,7 @@ function distribuicaoCarteira()
             INNER JOIN ativo a
                 ON a.id_ativo = i.id_ativo
             -- LEFT: ativo sem cotação (Cripto, Renda Fixa, Internacional) não pode
-            -- sumir do donut; nesse caso vale o preço médio pago (mesma regra do
-            -- carteiraResumo.php: não inventa lucro nem prejuízo).
+            -- sumir do donut; nesse caso vale o preço médio pago.
             LEFT JOIN LATERAL (
                 SELECT
                     cota.preco_fechamento_cotacao AS preco
