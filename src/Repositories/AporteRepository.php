@@ -451,3 +451,11 @@ function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+function buscarRecorrenteAtivoIgual(PDO $conexao, $idCarteira, $idAtivo, $frequencia)
+{
+    $stmt = $conexao->prepare("SELECT id_aporte_recorrente FROM aporte_recorrente
+        WHERE id_carteira = ? AND id_ativo = ? AND frequencia_recorrente = ?
+        AND ativo_flag_recorrente::int = 1 LIMIT 1");
+    $stmt->execute([$idCarteira, $idAtivo, $frequencia]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
