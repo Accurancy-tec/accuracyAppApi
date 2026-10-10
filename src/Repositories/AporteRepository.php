@@ -39,7 +39,7 @@ function criarAporteRecorrente(PDO $conexao, $idCarteira, $idAtivo, $valorRecorr
     $sql = "INSERT INTO aporte_recorrente
                 (id_carteira, id_ativo, valor_recorrente, frequencia_recorrente, dia_referencia_recorrente, ativo_flag_recorrente, proxima_execucao_recorrente)
             VALUES
-                (:carteira, :ativo, :valor, :frequencia, :dia, 1, :proxima)
+                (:carteira, :ativo, :valor, :frequencia, :dia, TRUE, :proxima)
             RETURNING id_aporte_recorrente";
 
     $stmt = $conexao->prepare($sql);
