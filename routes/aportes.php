@@ -19,8 +19,12 @@ switch ($acao) {
         excluirAporte();
         break;
 
-        case 'historico-aportes':
+    case 'historico-aportes':
         buscarHistoricoAportes();
+        break;
+
+    case 'listar-aportes':
+        listarAportes();
         break;
 
     default:

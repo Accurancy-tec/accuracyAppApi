@@ -8,8 +8,8 @@ require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/AtivoService.php";
 require_once __DIR__ . "/../Services/AporteService.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
-require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
+require_once __DIR__ . "/AutomacaoController.php";
 
 function buscarAportesDoUsuario()
 {
@@ -63,9 +63,9 @@ function fazerAporte()
     $typeContribution = $dados['tipo_aporte'] ?? null;
     $contributionQuantity = $dados['quantidade_aporte'] ?? null;
     $contributionAmount = $dados['valor_aporte'] ?? null;
-    $contributionRecurrence = $dados['recorrencia_aporte'];
+    $contributionRecurrence = $dados['recorrencia_aporte'] ?? null;
     $contributionNotes = $dados['observacao_aporte'] ?? null;
-    $contributionDate = date("Y-m-d");
+    $contributionDate = dataHojeCron();
 
     $idUsuario = autenticar();
 
@@ -105,6 +105,20 @@ function fazerAporte()
         if (!$posicaoAtualizada) {
             throw new Exception("Quantidade Insuficiente para venda. A operação não pode ser concluída.");
         }
+
+        if ($contributionRecurrence !== "Único" && $typeContribution === "Compra") {
+            $existente = buscarRecorrenteAtivoIgual($conexao, $idWallet, $idAtivo, $contributionRecurrence);
+
+            if ($existente) {
+                $upd = $conexao->prepare("UPDATE aporte_recorrente SET valor_recorrente = ? WHERE id_aporte_recorrente = ?");
+                $upd->execute([$contributionAmount, $existente["id_aporte_recorrente"]]);
+            } else {
+                $dia = (int) date("j", strtotime($contributionDate));
+                $proxima = proximaDataRecorrenteCron($contributionDate, $contributionRecurrence, $dia);
+                criarAporteRecorrenteService($conexao, $idWallet, $idAtivo, $contributionAmount, $contributionRecurrence, $dia, $proxima);
+            }
+        }
+
         $conexao->commit();
 
         echo json_encode([
@@ -298,7 +312,7 @@ function aporteRecorrente()
                     echo json_encode([
                         "sucesso" => false,
                         "mensagem" =>
-                        "Aporte recorrente não pertence ao usuário"
+                            "Aporte recorrente não pertence ao usuário"
                     ]);
 
                     exit;
@@ -435,6 +449,31 @@ function excluirAporte()
         echo json_encode([
             "sucesso" => false,
             "mensagem" => "Erro ao excluir aporte: " . $erro->getMessage()
+        ]);
+    }
+}
+
+function listarAportes()
+{
+    global $conexao;
+
+    try {
+        $idUsuario = autenticar();
+
+        $dados = json_decode(file_get_contents("php://input"), true);
+        $Choise = $_GET["Choise"] ?? $dados["Choise"] ?? null;
+
+        $aportes = listarAportesService($conexao, $idUsuario, $Choise);
+
+        echo json_encode([
+            "sucesso" => true,
+            "aportes" => $aportes
+        ]);
+    } catch (Throwable $erro) {
+        http_response_code(500);
+        echo json_encode([
+            "sucesso" => false,
+            "mensagem" => "Erro ao listar aportes: " . $erro->getMessage()
         ]);
     }
 }
