@@ -88,13 +88,14 @@ function fazerAporte()
             // tiver nenhuma, cria a "Carteira principal".
             $carteirasDoUsuario = getCarteirasDoUsuarioService($conexao, $idUsuario);
 
-            $idWallet = $carteirasDoUsuario
+            /*$idWallet = $carteirasDoUsuario
                 ? end($carteirasDoUsuario)["id_carteira"]
-                : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");
+                : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");*/
         }
 
         $conexao->beginTransaction();
 
+        error_log("ID CARTEIRA RECEBIDO NO APORTE: " . ($dados["id_carteira"] ?? "NULL"));
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
 
         criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
