@@ -5,19 +5,20 @@ header("Content-Type: application/json; charset=UTF-8");
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../../database/conexao.php";
 
-function periodoGraficoEmDias($periodo)
+
+function periodoGraficoEmMeses($periodo)
 {
     switch (strtoupper(trim((string) $periodo))) {
         case "1M":
-            return 30;
+            return 1;
 
         case "1A":
         case "12M":
-            return 365;
+            return 12;
 
         case "6M":
         default:
-            return 180;
+            return 6;
     }
 }
 
@@ -28,7 +29,7 @@ function evolucaoCarteira()
     try {
         $idUsuario = autenticar();
         $periodo = strtoupper(trim($_GET["periodo"] ?? "6M"));
-        $dias = periodoGraficoEmDias($periodo);
+        $meses = periodoGraficoEmMeses($periodo);
 
         $agora = new DateTimeImmutable(
             "now",
@@ -36,9 +37,17 @@ function evolucaoCarteira()
         );
 
         $dataFim = $agora->format("Y-m-d");
-        $dataInicio = $agora
-            ->modify("-" . ($dias - 1) . " days")
-            ->format("Y-m-d");
+
+        if ($meses === 1) {
+
+            $dataInicio = $agora->modify("-30 days")->format("Y-m-d");
+        } else {
+
+            $dataInicio = $agora
+                ->modify("first day of this month")
+                ->modify("-" . ($meses - 1) . " months")
+                ->format("Y-m-d");
+        }
 
         $idCarteira = isset($_GET["id_carteira"])
             ? (int) $_GET["id_carteira"]
@@ -186,7 +195,6 @@ function evolucaoCarteira()
         ]);
     }
 }
-
 
 function gerarGrafico()
 {
