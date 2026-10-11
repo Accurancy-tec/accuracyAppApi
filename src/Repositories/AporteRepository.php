@@ -365,83 +365,50 @@ function recalcularPosicaoAposExclusao(PDO $conexao, $idCarteira, $idAtivo)
 
 function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)
 {
+    // Variação do dia = último fechamento de dia útil vs. fechamento anterior
+    // (sábado e domingo repetem o fechamento de sexta, então são ignorados)
+    $base = "
+        WITH ranked AS (
+            SELECT id_ativo, preco_fechamento_cotacao AS preco,
+                   ROW_NUMBER() OVER (PARTITION BY id_ativo ORDER BY data_cotacao DESC) AS rn
+            FROM Cotacao_Ativo
+            WHERE EXTRACT(DOW FROM data_cotacao) BETWEEN 1 AND 5
+        ),
+        variacao AS (
+            SELECT a.id_ativo, a.preco AS preco_atual,
+                   CASE WHEN p.preco > 0 THEN (a.preco - p.preco) / p.preco * 100 ELSE 0 END AS variacao
+            FROM ranked a
+            LEFT JOIN ranked p ON p.id_ativo = a.id_ativo AND p.rn = 2
+            WHERE a.rn = 1
+        )
+        SELECT
+            MIN(ii.id_carteira) AS id_carteira,
+            atv.simbolo_ativo   AS ativo_aporte,
+            atv.nome_ativo      AS name_ativo,
+            atv.categoria_ativo AS categoria_ativo,
+            SUM(ii.quantidade_item) AS quantidade_aporte,
+            SUM(ii.quantidade_item * COALESCE(v.preco_atual, ii.preco_medio_item)) AS valor_aporte,
+            COALESCE(v.variacao, 0) AS rendimento_percentual,
+            'Posicao' AS tipo_aporte,
+            ''        AS recorrencia_aporte
+        FROM Item_Investimento ii
+        JOIN Carteira c ON c.id_carteira = ii.id_carteira
+        JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
+        LEFT JOIN variacao v ON v.id_ativo = ii.id_ativo
+        WHERE c.id_usuario = ?
+        GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo, v.variacao
+    ";
+
     switch ($Choise) {
-
         case 'Mais caros':
-            $sql = "SELECT
-                        a.id_carteira,
-                        atv.simbolo_ativo   AS ativo_aporte,
-                        atv.nome_ativo      AS name_ativo,
-                        atv.categoria_ativo AS categoria_ativo,
-                        a.quantidade_aporte AS quantidade_aporte,
-                        a.valor_aporte      AS valor_aporte,
-                        a.tipo_aporte       AS tipo_aporte,
-                        a.recorrencia_aporte AS recorrencia_aporte
-                    FROM Aporte a
-                    JOIN Carteira c ON c.id_carteira = a.id_carteira
-                    JOIN Ativo atv  ON atv.id_ativo = a.id_ativo
-                    WHERE c.id_usuario = ?
-                      AND a.status_aporte = 'Concluída'
-                      AND a.tipo_aporte = 'Compra'
-                    ORDER BY a.valor_aporte DESC
-                    LIMIT 4";
-                    
+            $sql = $base . " ORDER BY valor_aporte DESC LIMIT 4";
             break;
-
         case 'Mais lucrativos':
-            $sql = "SELECT
-                MIN(ii.id_carteira)  AS id_carteira,
-                atv.simbolo_ativo    AS ativo_aporte,
-                atv.nome_ativo       AS name_ativo,
-                atv.categoria_ativo  AS categoria_ativo,
-                SUM(ii.quantidade_item) AS quantidade_aporte,
-                SUM(ii.quantidade_item *
-                    (cot.preco_fechamento_cotacao - ii.preco_medio_item)) AS valor_aporte,
-                'Lucro'              AS tipo_aporte,
-                ''                   AS recorrencia_aporte
-            FROM Item_Investimento ii
-            JOIN Carteira c ON c.id_carteira = ii.id_carteira
-            JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
-            JOIN Cotacao_Ativo cot ON cot.id_ativo = ii.id_ativo
-             AND cot.data_cotacao = (
-                 SELECT MAX(c2.data_cotacao)
-                 FROM Cotacao_Ativo c2
-                 WHERE c2.id_ativo = ii.id_ativo)
-            WHERE c.id_usuario = ?
-            GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo
-            HAVING SUM(ii.quantidade_item * (cot.preco_fechamento_cotacao - ii.preco_medio_item)) > 0
-            ORDER BY valor_aporte DESC
-            LIMIT 4";
-
+            $sql = $base . " HAVING COALESCE(v.variacao, 0) > 0 ORDER BY rendimento_percentual DESC LIMIT 4";
             break;
-
         case 'Maiores perdas':
-            $sql = "SELECT
-                MIN(ii.id_carteira)  AS id_carteira,
-                atv.simbolo_ativo    AS ativo_aporte,
-                atv.nome_ativo       AS name_ativo,
-                atv.categoria_ativo  AS categoria_ativo,
-                SUM(ii.quantidade_item) AS quantidade_aporte,
-                SUM(ii.quantidade_item *
-                    (cot.preco_fechamento_cotacao - ii.preco_medio_item)) AS valor_aporte,
-                'Perda'              AS tipo_aporte,
-                ''                   AS recorrencia_aporte
-            FROM Item_Investimento ii
-            JOIN Carteira c ON c.id_carteira = ii.id_carteira
-            JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
-            JOIN Cotacao_Ativo cot ON cot.id_ativo = ii.id_ativo
-             AND cot.data_cotacao = (
-                 SELECT MAX(c2.data_cotacao)
-                 FROM Cotacao_Ativo c2
-                 WHERE c2.id_ativo = ii.id_ativo)
-            WHERE c.id_usuario = ?
-            GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo
-            HAVING SUM(ii.quantidade_item * (cot.preco_fechamento_cotacao - ii.preco_medio_item)) < 0
-            ORDER BY valor_aporte ASC
-            LIMIT 4";
-
+            $sql = $base . " HAVING COALESCE(v.variacao, 0) < 0 ORDER BY rendimento_percentual ASC LIMIT 4";
             break;
-
         default:
             throw new InvalidArgumentException("Filtro inválido: " . $Choise);
     }
