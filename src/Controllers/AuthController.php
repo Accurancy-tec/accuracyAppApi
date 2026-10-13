@@ -49,7 +49,8 @@ function login()
         exit;
     }
 
-    if ($senha !== $usuario["senha_usuario"]) {
+
+    if (!password_verify($senha, $usuario["senha_usuario"])) {
         echo json_encode([
             "success" => false,
             "message" => "Email ou senha incorretos"
