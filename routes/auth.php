@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
+require_once __DIR__ . '/../src/Controllers/AuthController.php';
+require_once __DIR__ . '/../src/Controllers/GoogleAuthController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -21,11 +23,15 @@ switch ($acao) {
     case 'login':
         login();
         break;
-        
+
     case 'loginSite':
         loginSite();
         break;
-
+        
+    case 'loginGoogle':
+        loginGoogle();
+        break;
+        
     case 'registrarNovoUsuario':
         registrarUsuario();
         break;
