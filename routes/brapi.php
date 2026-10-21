@@ -13,6 +13,10 @@ switch ($acao) {
         getQuote();
         break;
 
+    case 'listar-acoes-nacionais':
+        listarAcoesNacionais();
+        break;
+
     default:
 
         http_response_code(404);
