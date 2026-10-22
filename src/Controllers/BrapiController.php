@@ -1,194 +1,206 @@
 <?php
+
 require_once __DIR__ . "/../../config/cors.php";
 
-function buscarAcao(String $ticker)
+function brapiRequest(string $endpoint, array $query = []): array
 {
-    $url = getenv("BRAPI_BASE_URL") . "/v2/stocks/quote?symbols=" . urlencode($ticker);
+    $baseUrl = getenv("BRAPI_BASE_URL");
+    $token = getenv("BRAPI_TOKEN");
 
-    $curl = curl_init($url);
-
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-
-    curl_setopt_array($curl, [
-        CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer " . getenv("BRAPI_TOKEN"),
-            "Accept: application/json"
-        ]
-    ]);
-
-    $inicio = microtime(true);
-    $response = curl_exec($curl);
-
-    $fim = microtime(true);
-
-    error_log("Tempo CURL: " . ($fim - $inicio));
-
-    if ($response == false) {
-        die(curl_error($curl));
+    if (!is_string($baseUrl) || trim($baseUrl) === "") {
+        return ["ok" => false, "status" => 500, "body" => null, "error" => "BRAPI_BASE_URL não configurada"];
+    }
+    if (!is_string($token) || trim($token) === "") {
+        return ["ok" => false, "status" => 500, "body" => null, "error" => "BRAPI_TOKEN não configurado"];
     }
 
-    return $response;
+    $url = rtrim($baseUrl, "/") . "/" . ltrim($endpoint, "/");
+    if (!empty($query)) {
+        $url .= "?" . http_build_query($query);
+    }
+
+    $curl = curl_init($url);
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "Authorization: Bearer " . $token,
+            "Accept: application/json"
+        ],
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_FOLLOWLOCATION => false
+    ]);
+
+    $body = curl_exec($curl);
+    $curlError = curl_error($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+
+    if ($body === false) {
+        error_log("Brapi cURL error: " . $curlError);
+        return ["ok" => false, "status" => 502, "body" => null, "error" => "Falha de conexão com a Brapi"];
+    }
+
+    if ($status < 200 || $status >= 300) {
+        error_log("Brapi HTTP status: " . $status . " endpoint=" . $endpoint);
+        return ["ok" => false, "status" => $status, "body" => $body, "error" => "A Brapi retornou HTTP " . $status];
+    }
+
+    return ["ok" => true, "status" => $status, "body" => $body, "error" => null];
+}
+
+function responderErroBrapi(string $mensagem, int $status = 502): void
+{
+    http_response_code($status);
+    echo json_encode([
+        "success" => false,
+        "sucesso" => false,
+        "message" => $mensagem,
+        "mensagem" => $mensagem
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function buscarAcao(string $ticker)
+{
+    $resultado = brapiRequest("v2/stocks/quote", ["symbols" => $ticker]);
+    if (!$resultado["ok"]) {
+        return false;
+    }
+    return $resultado["body"];
 }
 
 function buscarSymbols()
 {
-
-    $url = getenv("BRAPI_BASE_URL") . "/v2/tickers";
-
-    $curl = curl_init($url);
-
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-
-    curl_setopt_array($curl, [
-        CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer " . getenv("BRAPI_TOKEN"),
-            "Accept: application/json"
-        ]
-    ]);
-
-    $inicio = microtime(true);
-    $response = curl_exec($curl);
-    if ($response === false) {
-        die("Erro CURL: " . curl_errno($curl) . " - " . curl_error($curl));
+    $resultado = brapiRequest("v2/tickers");
+    if (!$resultado["ok"]) {
+        return false;
     }
-    $fim = microtime(true);
-
-    error_log("Tempo CURL: " . ($fim - $inicio));
-
-    if ($response == false) {
-        die(curl_error($curl));
-    }
-
-    return $response;
+    return $resultado["body"];
 }
 
-function getQuote()
+function getQuote(): void
 {
-    $ticker = $_GET['symbol'];
-
-
-    if (empty($ticker)) {
-        echo json_encode([
-            "success" => false,
-            "message" => "Ticker não informado"
-        ]);
-        exit();
+    header("Content-Type: application/json; charset=UTF-8");
+    $ticker = trim((string) ($_GET["symbol"] ?? ""));
+    if ($ticker === "") {
+        responderErroBrapi("Ticker não informado", 400);
+        return;
+    }
+    if (!preg_match('/^[A-Za-z0-9.^_-]{1,24}$/', $ticker)) {
+        responderErroBrapi("Ticker inválido", 400);
+        return;
     }
 
-    $reponse = buscarAcao($ticker);
-
-    echo $reponse;
+    $resposta = buscarAcao($ticker);
+    if ($resposta === false) {
+        responderErroBrapi("Não foi possível consultar a cotação na Brapi");
+        return;
+    }
+    echo $resposta;
 }
 
-function getSymbols()
+function getSymbols(): void
+{
+    header("Content-Type: application/json; charset=UTF-8");
+    $resposta = buscarSymbols();
+    if ($resposta === false) {
+        responderErroBrapi("Não foi possível listar os tickers na Brapi");
+        return;
+    }
+    echo $resposta;
+}
+
+function listarAcoesNacionais(): void
 {
     header("Content-Type: application/json; charset=UTF-8");
 
-    try {
-        $reponse = buscarSymbols();
-        echo $reponse;
-    } catch (Exception $e) {
-        echo json_encode([
-            "success" => false,
-            "message" => $e->getMessage()
-        ]);
-        exit();
-    }
-}
+    $pageRaw = $_GET["page"] ?? "1";
+    $limitRaw = $_GET["limit"] ?? "20";
+    $page = filter_var($pageRaw, FILTER_VALIDATE_INT);
+    $limit = filter_var($limitRaw, FILTER_VALIDATE_INT);
 
-
-// Lista as açoes nacionais da brapi com paginação, o limite de ações por requisição é 20
-
-function listarAcoesNacionais()
-{
-    header('Content-Type: application/json; charset=utf-8');
-
-    $page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
-    $limit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT);
-
-    $page = $page === false || $page === null ? 1 : $page;
-    $limit = $limit === false || $limit === null ? 20 : $limit;
-
-    if ($page < 1 || $limit < 1 || $limit > 20) {
-        http_response_code(400);
-
-        echo json_encode([
-            'success' => false,
-            'message' => "Página inválida ou limite fora do intervalo"
-        ]);
+    if ($page === false || $page === null || $limit === false || $limit === null || $page < 1 || $limit < 1 || $limit > 20) {
+        responderErroBrapi("Página inválida ou limite fora do intervalo (1 a 20)", 400);
         return;
     }
 
-    $token = getenv("BRAPI_TOKEN");
-
-    if ($token == '') {
-        http_response_code(500);
-        echo json_encode([
-            'success' => false,
-            'message' => "Token não configurado"
-        ]);
-        return;
-    }
-
-    $url = getenv("BRAPI_BASE_URL") . '/quote/list?' . http_build_query([
-        'type' => 'stock',
-        'page' => $page,
-        'limit' => $limit,
+    $resultado = brapiRequest("quote/list", [
+        "type" => "stock",
+        "page" => $page,
+        "limit" => $limit
     ]);
 
-    $curl = curl_init($url);
-
-    curl_setopt_array($curl, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer ' . $token,
-            'Accept: application/json'
-        ],
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30
-    ]);
-
-    $resposta = curl_exec($curl);
-    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
-    if ($resposta === false || $status < 200 || $status > 300) {
-        http_response_code(502);
-
-        echo json_encode([
-            'success' => false,
-            'message' => 'Erro ao consultar as ações na brapi.'
-        ]);
-
+    if (!$resultado["ok"]) {
+        responderErroBrapi("Erro ao consultar as ações na Brapi");
         return;
     }
 
-    $dados = json_decode($resposta, true);
-
-    error_log('DEBUG BRAPI: ' . json_encode([
-        'temStocks' => isset($dados['stocks']),
-        'tipoStocks' => gettype($dados['stocks'] ?? null),
-        'quantidadeStocks' => count($dados['stocks'] ?? [])
-    ]));
-
-    /*if (!is_array($dados) || !array_key_exists('stock', $dados) || !is_array($dados['stocks'])) {
-        http_response_code(502);
-
-        echo json_encode([
-            'success' => false,
-            'message' => 'Resposta inválida da brapi.',
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
+    $dados = json_decode($resultado["body"], true);
+    if (!is_array($dados) || !isset($dados["stocks"]) || !is_array($dados["stocks"])) {
+        error_log("Brapi quote/list retornou JSON em formato inesperado");
+        responderErroBrapi("Resposta inválida da Brapi");
         return;
-    }*/
+    }
+
+    $stocks = [];
+    foreach ($dados["stocks"] as $stock) {
+        if (!is_array($stock)) continue;
+        $stocks[] = [
+            "stock" => $stock["stock"] ?? $stock["symbol"] ?? "",
+            "name" => $stock["name"] ?? $stock["longName"] ?? $stock["shortName"] ?? "",
+            "close" => $stock["close"] ?? $stock["regularMarketPrice"] ?? null,
+            "change" => $stock["change"] ?? $stock["regularMarketChangePercent"] ?? null,
+            "volume" => $stock["volume"] ?? $stock["regularMarketVolume"] ?? null,
+            "logo" => $stock["logo"] ?? $stock["logourl"] ?? $stock["logoUrl"] ?? null
+        ];
+    }
 
     echo json_encode([
-        'success' => true,
-        'stocks' => $dados['stocks'],
-        'paginacao' => [
-            'paginaAtual' => $dados['currentPage'] ?? $page,
-            'totalPaginas' => $dados['totalPages'] ?? null,
-            'totalAtivos' => $dados['totalCount'] ?? null,
-            'temProximaPagina' => $dados['hasNextPage'] ?? false
+        "success" => true,
+        "stocks" => $stocks,
+        "paginacao" => [
+            "paginaAtual" => $dados["currentPage"] ?? $page,
+            "totalPaginas" => $dados["totalPages"] ?? null,
+            "totalAtivos" => $dados["totalCount"] ?? null,
+            "temProximaPagina" => $dados["hasNextPage"] ?? false
         ]
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function historicoAcoes(): void
+{
+    header("Content-Type: application/json; charset=UTF-8");
+
+    $symbol = strtoupper(trim((string) ($_GET["symbol"] ?? "")));
+    $range = trim((string) ($_GET["range"] ?? "3mo"));
+    $rangesPermitidos = ["7d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"];
+
+    if ($symbol === "" || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+        responderErroBrapi("Ticker ausente ou inválido", 400);
+        return;
+    }
+    if (!in_array($range, $rangesPermitidos, true)) {
+        responderErroBrapi("Período inválido", 400);
+        return;
+    }
+
+    $resultado = brapiRequest("v2/stocks/historical", [
+        "symbols" => $symbol,
+        "range" => $range,
+        "interval" => "1d",
+        "sortOrder" => "asc"
+    ]);
+
+    if (!$resultado["ok"]) {
+        responderErroBrapi("Não foi possível consultar o histórico de preços na Brapi");
+        return;
+    }
+
+    $dados = json_decode($resultado["body"], true);
+    if (!is_array($dados) || !isset($dados["results"]) || !is_array($dados["results"])) {
+        responderErroBrapi("Resposta de histórico em formato inválido");
+        return;
+    }
+
+    echo json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
