@@ -50,3 +50,7 @@ function listarAportesService(PDO $conexao,$idUsuario,$Choise)
 {
     return listarAportesDestaque($conexao,$idUsuario,$Choise);
 }
+
+function listarTitulosRendaFixaService(PDO $conexao){
+    return listarTitulosRendaFixa($conexao);
+}
