@@ -27,6 +27,10 @@ switch ($acao) {
         listarAportes();
         break;
 
+    case 'listar-titulosRF':
+        listarTitulosRF();
+        break;
+
     default:
 
         http_response_code(404);

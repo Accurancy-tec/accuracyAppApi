@@ -418,6 +418,7 @@ function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
 function buscarRecorrenteAtivoIgual(PDO $conexao, $idCarteira, $idAtivo, $frequencia)
 {
     $stmt = $conexao->prepare("SELECT id_aporte_recorrente FROM aporte_recorrente
@@ -425,4 +426,29 @@ function buscarRecorrenteAtivoIgual(PDO $conexao, $idCarteira, $idAtivo, $freque
         AND ativo_flag_recorrente::int = 1 LIMIT 1");
     $stmt->execute([$idCarteira, $idAtivo, $frequencia]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function listarTitulosRendaFixa(PDO $conexao){
+    $sql = "
+        SELECT
+            id_titulo,
+            nome_titulo,
+            tipo_titulo,
+            rentabilidade,
+            indexador,
+            aplicacao_minima,
+            vencimento,
+            liquidez,
+            taxa_administracao,
+            possui_garantia_fgc,
+            descricao
+        FROM titulos_renda_fixa
+        WHERE ativo = TRUE
+        ORDER BY id_titulo DESC
+    ";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }

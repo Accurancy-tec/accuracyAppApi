@@ -477,3 +477,28 @@ function listarAportes()
         ]);
     }
 }
+
+function listarTitulosRF(){
+    global $conexao;
+
+    try {
+        $titulos = listarTitulosRendaFixaService($conexao);
+
+        http_response_code(200);
+
+        echo json_encode([
+            "success" => true,
+            "titulos" => $titulos
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    } catch (Throwable $error) {
+        error_log("Erro ao listar títulos de renda fixa: " . $error->getMessage());
+
+        http_response_code(500);
+
+        echo json_encode([
+            "success" => false,
+            "message" => "Erro interno ao buscar os títulos de renda fixa."
+        ], JSON_UNESCAPED_UNICODE);
+    }
+}
