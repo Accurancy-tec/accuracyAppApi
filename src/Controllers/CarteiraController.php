@@ -191,3 +191,85 @@ function distribuicaoCarteira()
         ]);
     }
 }
+
+function buscarPosicaoAtivoUsuario(): void
+{
+    global $conexao;
+
+    header('Content-Type: application/json; charset=UTF-8');
+
+    try {
+        $idUsuario = autenticar();
+        $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+
+        if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'sucesso' => false,
+                'mensagem' => 'Ticker ausente ou inválido.'
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            return;
+        }
+
+        $stmt = $conexao->prepare("
+            SELECT
+                COALESCE(SUM(ii.quantidade_item), 0) AS quantidade,
+                CASE
+                    WHEN COALESCE(SUM(ii.quantidade_item), 0) > 0
+                    THEN SUM(ii.quantidade_item * ii.preco_medio_item)
+                         / SUM(ii.quantidade_item)
+                    ELSE NULL
+                END AS preco_medio
+            FROM carteira c
+            INNER JOIN item_investimento ii
+                ON ii.id_carteira = c.id_carteira
+            INNER JOIN ativo a
+                ON a.id_ativo = ii.id_ativo
+            WHERE c.id_usuario = :id_usuario
+              AND UPPER(a.simbolo_ativo) = :symbol
+              AND ii.quantidade_item > 0
+        ");
+
+        $stmt->execute([
+            ':id_usuario' => $idUsuario,
+            ':symbol' => $symbol
+        ]);
+
+        $linha = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $quantidade = max(
+            0.0,
+            (float) ($linha['quantidade'] ?? 0)
+        );
+
+        $precoMedioRaw = $linha['preco_medio'] ?? null;
+
+        $precoMedio = $quantidade > 0 && is_numeric($precoMedioRaw)
+            ? (float) $precoMedioRaw
+            : null;
+
+        echo json_encode([
+            'success' => true,
+            'sucesso' => true,
+            'symbol' => $symbol,
+            'quantidade' => $quantidade,
+            'precoMedio' => $precoMedio,
+            'hasPosition' => $quantidade > 0 && $precoMedio !== null
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } catch (Throwable $erro) {
+        error_log(
+            'Failed to retrieve asset position: ' . $erro->getMessage()
+        );
+
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'sucesso' => false,
+            'mensagem' => 'Não foi possível consultar a posição do ativo.'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}
