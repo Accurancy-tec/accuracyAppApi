@@ -8,20 +8,24 @@ switch ($acao) {
     case 'get-symbols':
         getSymbols();
         break;
-
-    // Padronizado com ApiService.java: /brapi/get-quote?symbol=PETR4
     case 'get-quote':
         getQuote();
         break;
-
     case 'listar-acoes-nacionais':
         listarAcoesNacionais();
         break;
-
     case 'historico-acoes':
         historicoAcoes();
         break;
-
+    case 'listar-fiis':
+        listarFiis();
+        break;
+    case 'get-fii-quote':
+        getFiiQuote();
+        break;
+    case 'historico-fiis':
+        historicoFiis();
+        break;
     default:
         http_response_code(404);
         echo json_encode([
