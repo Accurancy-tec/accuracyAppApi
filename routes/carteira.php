@@ -24,6 +24,10 @@ switch ($acao) {
 
     case 'excluir-carteira':
         break;
+    
+    case 'posicao-ativo':
+        buscarPosicaoAtivoUsuario();
+    break;
 
     default:
         http_response_code(404);
