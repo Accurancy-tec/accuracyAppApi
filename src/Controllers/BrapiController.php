@@ -204,3 +204,312 @@ function historicoAcoes(): void
 
     echo json_encode($dados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
+function fiiDadosDaCotacao(array $item): array
+{
+    $dados = isset($item['data']) && is_array($item['data']) ? $item['data'] : $item;
+    if (!isset($dados['symbol']) && isset($item['symbol'])) {
+        $dados['symbol'] = $item['symbol'];
+    }
+    if (!isset($dados['logourl']) && isset($item['logourl'])) {
+        $dados['logourl'] = $item['logourl'];
+    }
+    return $dados;
+}
+
+
+function fiiHistoricoFallback(array $symbols): array
+{
+    $symbols = array_values(array_unique(array_filter(array_map(
+        static fn($s) => strtoupper(trim((string) $s)), $symbols
+    ))));
+    if (!$symbols) return [];
+
+    $fuso = new DateTimeZone('America/Sao_Paulo');
+    $hoje = new DateTimeImmutable('today', $fuso);
+    $inicio = $hoje->modify('-20 days');
+    $resposta = brapiRequest('v2/fii/historical', [
+        'symbols' => implode(',', array_slice($symbols, 0, 20)),
+        'startDate' => $inicio->format('Y-m-d'),
+        'endDate' => $hoje->format('Y-m-d'),
+        'sortOrder' => 'desc'
+    ]);
+
+    if (!$resposta['ok']) {
+        error_log('Fallback de histórico dos FIIs indisponível. HTTP: ' . $resposta['status']);
+        return [];
+    }
+
+    $body = json_decode((string) $resposta['body'], true);
+    if (!is_array($body) || !isset($body['fiis']) || !is_array($body['fiis'])) return [];
+
+    $resultado = [];
+    foreach ($body['fiis'] as $serie) {
+        if (!is_array($serie)) continue;
+        $symbol = strtoupper(trim((string) ($serie['symbol'] ?? '')));
+        $pontos = $serie['historicalDataPrice'] ?? [];
+        if ($symbol === '' || !is_array($pontos)) continue;
+
+        $pontosValidos = array_values(array_filter($pontos, static function ($p) {
+            return is_array($p) && is_numeric($p['date'] ?? null)
+                && is_numeric($p['close'] ?? null) && (float) $p['close'] > 0;
+        }));
+        usort($pontosValidos, static fn($a, $b) => (int) $b['date'] <=> (int) $a['date']);
+
+        $resultado[$symbol] = [
+            'latestClose' => isset($pontosValidos[0]) ? (float) $pontosValidos[0]['close'] : null,
+            'previousClose' => isset($pontosValidos[1]) ? (float) $pontosValidos[1]['close'] : null,
+            'latestDate' => isset($pontosValidos[0]['date']) ? (int) $pontosValidos[0]['date'] : null,
+        ];
+    }
+    return $resultado;
+}
+
+function listarFiis(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
+    $limit = filter_var($_GET['limit'] ?? '20', FILTER_VALIDATE_INT);
+    $search = trim((string) ($_GET['search'] ?? ''));
+    $segmentType = trim((string) ($_GET['segmentType'] ?? ''));
+    $sortBy = trim((string) ($_GET['sortBy'] ?? 'totalInvestors'));
+    $sortOrder = trim((string) ($_GET['sortOrder'] ?? 'desc'));
+
+    if ($page === false || $page === null || $limit === false || $limit === null
+        || $page < 1 || $limit < 1 || $limit > 20) {
+        responderErroBrapi('Página ou limite inválido (o limite permitido é de 1 a 20).', 400);
+        return;
+    }
+
+    $segmentosPermitidos = ['papel', 'tijolo', 'hibrido', 'fof'];
+    $ordenacoesPermitidas = [
+        'symbol', 'name', 'segmentoAtuacao', 'mandate', 'price', 'navPerShare',
+        'priceToNav', 'dividendYield12m', 'totalInvestors'
+    ];
+    if ($segmentType !== '' && !in_array($segmentType, $segmentosPermitidos, true)) {
+        responderErroBrapi('Segmento inválido.', 400);
+        return;
+    }
+    if (!in_array($sortBy, $ordenacoesPermitidas, true)) {
+        responderErroBrapi('Ordenação inválida.', 400);
+        return;
+    }
+    if (!in_array($sortOrder, ['asc', 'desc'], true)) {
+        responderErroBrapi('Ordem inválida.', 400);
+        return;
+    }
+    if (strlen($search) > 400) {
+        responderErroBrapi('A pesquisa deve ter no máximo 400 bytes.', 400);
+        return;
+    }
+
+    $query = ['page' => $page, 'limit' => $limit, 'sortBy' => $sortBy, 'sortOrder' => $sortOrder];
+    if ($search !== '') $query['search'] = $search;
+    if ($segmentType !== '') $query['segmentType'] = $segmentType;
+
+    $respostaLista = brapiRequest('v2/fii/list', $query);
+    if (!$respostaLista['ok']) {
+        $status = (int) ($respostaLista['status'] ?? 502);
+        if ($status === 403) {
+            responderErroBrapi('O plano da brapi não liberou a listagem detalhada de FIIs.', 403);
+            return;
+        }
+        error_log('Erro ao listar FIIs na brapi. HTTP: ' . $status);
+        responderErroBrapi('Não foi possível consultar os FIIs na brapi.', 502);
+        return;
+    }
+
+    $dadosLista = json_decode((string) $respostaLista['body'], true);
+    if (!is_array($dadosLista) || !isset($dadosLista['fiis']) || !is_array($dadosLista['fiis'])) {
+        error_log('Resposta de listagem de FIIs em formato inesperado.');
+        responderErroBrapi('Resposta inválida da brapi ao listar FIIs.');
+        return;
+    }
+
+    $fiisValidos = [];
+    $symbols = [];
+    foreach ($dadosLista['fiis'] as $fii) {
+        if (!is_array($fii)) continue;
+        $symbol = strtoupper(trim((string) ($fii['symbol'] ?? $fii['stock'] ?? '')));
+        if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) continue;
+        $fii['_normalizedSymbol'] = $symbol;
+        $fiisValidos[] = $fii;
+        $symbols[] = $symbol;
+    }
+
+    $quotesBySymbol = [];
+    if ($symbols) {
+        $respostaCotacoes = brapiRequest('quote/' . implode(',', $symbols));
+        if ($respostaCotacoes['ok']) {
+            $cotacoesJson = json_decode((string) $respostaCotacoes['body'], true);
+            foreach (($cotacoesJson['results'] ?? []) as $item) {
+                if (!is_array($item)) continue;
+                $cotacao = fiiDadosDaCotacao($item);
+
+                $aliases = [
+                    $item['requestedSymbol'] ?? null,
+                    $item['symbol'] ?? null,
+                    $cotacao['symbol'] ?? null,
+                ];
+                foreach ($aliases as $alias) {
+                    $alias = strtoupper(trim((string) $alias));
+                    if ($alias !== '') $quotesBySymbol[$alias] = $cotacao;
+                }
+            }
+        } else {
+            error_log('Cotação em lote de FIIs indisponível. HTTP: ' . ($respostaCotacoes['status'] ?? 502));
+        }
+    }
+
+    $precisaHistorico = [];
+    foreach ($fiisValidos as $fii) {
+        $symbol = $fii['_normalizedSymbol'];
+        $quote = $quotesBySymbol[$symbol] ?? [];
+        $price = $quote['regularMarketPrice'] ?? $fii['price'] ?? null;
+        $change = $quote['regularMarketChangePercent'] ?? $quote['changePercent'] ?? null;
+        if (!is_numeric($price) || (float) $price <= 0 || !is_numeric($change)) $precisaHistorico[] = $symbol;
+    }
+    $historicoBySymbol = fiiHistoricoFallback($precisaHistorico);
+
+    $stocks = [];
+    foreach ($fiisValidos as $fii) {
+        $symbol = $fii['_normalizedSymbol'];
+        $quote = $quotesBySymbol[$symbol] ?? [];
+        $historico = $historicoBySymbol[$symbol] ?? [];
+
+        $price = $quote['regularMarketPrice'] ?? $fii['price'] ?? null;
+        $previousClose = $quote['regularMarketPreviousClose'] ?? $quote['previousClose'] ?? null;
+        $change = $quote['regularMarketChangePercent'] ?? $quote['changePercent'] ?? null;
+        $marketTime = $quote['regularMarketTime'] ?? null;
+
+        if ((!is_numeric($price) || (float) $price <= 0)
+            && is_numeric($historico['latestClose'] ?? null) && (float) $historico['latestClose'] > 0) {
+            $price = $historico['latestClose'];
+        }
+        if (!is_numeric($change) && is_numeric($price) && is_numeric($previousClose) && (float) $previousClose > 0) {
+            $change = (((float) $price - (float) $previousClose) / (float) $previousClose) * 100.0;
+        }
+        if (!is_numeric($change) && is_numeric($historico['latestClose'] ?? null)
+            && is_numeric($historico['previousClose'] ?? null) && (float) $historico['previousClose'] > 0) {
+            $change = (((float) $historico['latestClose'] - (float) $historico['previousClose'])
+                / (float) $historico['previousClose']) * 100.0;
+        }
+        if (!is_numeric($price) || (float) $price <= 0) $price = null;
+        if (!is_numeric($change) || !is_finite((float) $change)) $change = null;
+
+        $logo = $quote['logourl'] ?? $quote['logoUrl'] ?? $quote['logo']
+            ?? $fii['logo'] ?? $fii['logoUrl'] ?? null;
+        if (!is_string($logo) || trim($logo) === '') {
+            $logo = 'https://icons.brapi.dev/icons/' . rawurlencode($symbol) . '.svg';
+        }
+        $nome = $quote['longName'] ?? $quote['shortName'] ?? $fii['name'] ?? $symbol;
+        $volume = $quote['regularMarketVolume'] ?? $fii['volume'] ?? null;
+
+        $stocks[] = [
+            'stock' => $symbol,
+            'name' => is_string($nome) && trim($nome) !== '' ? $nome : $symbol,
+            'close' => $price !== null ? (float) $price : null,
+            'change' => $change !== null ? (float) $change : null,
+            'volume' => is_numeric($volume) ? (int) $volume : null,
+            'logo' => $logo,
+            'marketTime' => is_string($marketTime) ? $marketTime : null,
+        ];
+    }
+
+    $pagination = $dadosLista['pagination'] ?? [];
+    echo json_encode([
+        'success' => true,
+        'stocks' => $stocks,
+        'paginacao' => [
+            'paginaAtual' => $pagination['page'] ?? $page,
+            'totalPaginas' => $pagination['totalPages'] ?? 0,
+            'totalAtivos' => $pagination['totalItems'] ?? null,
+            'temProximaPagina' => $pagination['hasNextPage'] ?? false,
+        ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function getFiiQuote(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    $ticker = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+    if ($ticker === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $ticker)) {
+        responderErroBrapi('Ticker de FII ausente ou inválido.', 400);
+        return;
+    }
+
+    // A cotação básica é /api/quote/{ticker}; não /api/v2/stocks/quote para FIIs.
+    $resultado = brapiRequest('quote/' . rawurlencode($ticker));
+    if (!$resultado['ok']) {
+        $status = (int) ($resultado['status'] ?? 502);
+        responderErroBrapi('Não foi possível consultar a cotação do FII na brapi.',
+            $status >= 400 && $status < 600 ? $status : 502);
+        return;
+    }
+    echo $resultado['body'];
+}
+
+function historicoFiis(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+    $range = trim((string) ($_GET['range'] ?? '3mo'));
+    $intervalos = ['7d' => '-7 days', '1mo' => '-1 month', '3mo' => '-3 months',
+        '6mo' => '-6 months', '1y' => '-1 year'];
+
+    if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+        responderErroBrapi('Ticker de FII ausente ou inválido.', 400);
+        return;
+    }
+    if (!isset($intervalos[$range])) {
+        responderErroBrapi('Período de histórico inválido.', 400);
+        return;
+    }
+
+    $fuso = new DateTimeZone('America/Sao_Paulo');
+    $hoje = new DateTimeImmutable('today', $fuso);
+    $inicio = $hoje->modify($intervalos[$range]);
+    $resultado = brapiRequest('v2/fii/historical', [
+        'symbols' => $symbol,
+        'startDate' => $inicio->format('Y-m-d'),
+        'endDate' => $hoje->format('Y-m-d'),
+        'sortOrder' => 'asc',
+    ]);
+
+    if (!$resultado['ok']) {
+        $status = (int) ($resultado['status'] ?? 502);
+        if ($status === 403) {
+            responderErroBrapi('O plano da brapi não liberou o histórico diário deste FII.', 403);
+            return;
+        }
+        responderErroBrapi('Não foi possível consultar o histórico diário do FII na brapi.',
+            $status >= 400 && $status < 600 ? $status : 502);
+        return;
+    }
+
+    $dados = json_decode((string) $resultado['body'], true);
+    if (!is_array($dados) || !isset($dados['fiis']) || !is_array($dados['fiis'])) {
+        error_log('Resposta do histórico de FIIs em formato inesperado.');
+        responderErroBrapi('Resposta de histórico de FIIs inválida.');
+        return;
+    }
+
+    $results = [];
+    foreach ($dados['fiis'] as $fii) {
+        if (!is_array($fii)) continue;
+        $requested = (string) ($fii['symbol'] ?? $symbol);
+        $points = $fii['historicalDataPrice'] ?? [];
+        if (!is_array($points)) $points = [];
+        $results[] = [
+            'requestedSymbol' => $symbol,
+            'symbol' => $requested,
+            'data' => [
+                'usedRange' => $range,
+                'usedInterval' => '1d',
+                'historicalDataPrice' => $points,
+            ],
+        ];
+    }
+    echo json_encode(['results' => $results, 'requestedAt' => $dados['requestedAt'] ?? null,
+        'took' => $dados['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
