@@ -43,7 +43,6 @@ function buscarCarteiras()
 
         echo json_encode([
             "success" => true,
-            "message" => "Carteiras encontradas",
             "carteiras" => $resultado
         ]);
     } catch (PDOException $e) {
