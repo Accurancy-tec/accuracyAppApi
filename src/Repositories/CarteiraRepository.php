@@ -70,3 +70,38 @@ function getCarteirasDoUsuario(PDO $conexao, $id_usuario)
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+function buscarPosicoesAcoes(PDO $conexao, $idUsuario)
+{
+    $sql = "
+        SELECT
+            c.id_carteira,
+            c.nome_carteira,
+            ii.id_ativo,
+            a.simbolo_ativo AS ticker,
+            ii.quantidade_item AS quantidade,
+            ii.preco_medio_item AS preco_medio
+
+        FROM carteira c
+
+        INNER JOIN item_investimento ii
+            ON ii.id_carteira = c.id_carteira
+
+        INNER JOIN ativo a
+            ON a.id_ativo = ii.id_ativo
+
+        WHERE c.id_usuario = :id_usuario
+          AND a.categoria_ativo = 'Ações'
+          AND ii.quantidade_item > 0
+
+        ORDER BY c.id_carteira, a.simbolo_ativo
+    ";
+
+    $stmt = $conexao->prepare($sql);
+
+    $stmt->execute([
+        ':id_usuario' => $idUsuario
+    ]);
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}

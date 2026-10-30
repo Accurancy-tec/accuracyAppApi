@@ -1,6 +1,9 @@
 <?php
 
 require_once __DIR__ . "/../../config/cors.php";
+require_once __DIR__ . "/../Middleware/Authentication.php";
+require_once __DIR__ . "/../Services/BrapiService.php";
+require_once __DIR__ . "/../../database/conexao.php";
 
 function brapiRequest(string $endpoint, array $query = []): array
 {
@@ -512,4 +515,44 @@ function historicoFiis(): void
     }
     echo json_encode(['results' => $results, 'requestedAt' => $dados['requestedAt'] ?? null,
         'took' => $dados['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function patrimonioCarteirasController(): void {
+
+    global $conexao;
+    header('Content-Type: application/json; charset=UTF-8');
+
+    try {
+        $idUsuario = autenticar();
+        $resultado = patrimonioCarteirasService(
+            $conexao,
+            $idUsuario
+        );
+
+        // O status HTTP é usado pelo Controller,
+        // mas não será incluído no JSON.
+        $statusHttp = $resultado['http_status'] ?? 200;
+
+        unset($resultado['http_status']);
+
+        http_response_code($statusHttp);
+
+        echo json_encode(
+            $resultado,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+    } catch (Throwable $erro) {
+        error_log(
+            'Erro em patrimonioCarteirasController: ' .
+            $erro->getMessage()
+        );
+
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Erro interno ao consultar o patrimônio.'
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 }
