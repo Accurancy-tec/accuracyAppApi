@@ -517,16 +517,20 @@ function historicoFiis(): void
         'took' => $dados['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-function patrimonioCarteirasController(): void {
+function patrimonioCarteirasAcaoController(): void {
 
     global $conexao;
     header('Content-Type: application/json; charset=UTF-8');
 
     try {
         $idUsuario = autenticar();
-        $resultado = patrimonioCarteirasService(
+        $resultado = getCarteirasDoUsuario($conexao, $idUsuario);
+        $idCarteira = $resultado['id_carteira'];
+        
+        $resultado = patrimonioCarteirasAcaoService(
             $conexao,
-            $idUsuario
+            $idUsuario,
+            $idCarteira,
         );
 
         // O status HTTP é usado pelo Controller,

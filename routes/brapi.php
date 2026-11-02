@@ -27,7 +27,7 @@ switch ($acao) {
         historicoFiis();
         break;
     case 'patrimonio-carteiras':
-        patrimonioCarteirasController();
+        patrimonioCarteirasAcaoController();
         break;
     default:
         http_response_code(404);

@@ -71,7 +71,7 @@ function getCarteirasDoUsuario(PDO $conexao, $id_usuario)
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function buscarPosicoesAcoes(PDO $conexao, $idUsuario)
+function buscarPosicoesAcoes(PDO $conexao, $idUsuario, $idCarteira)
 {
     $sql = "
         SELECT
@@ -91,6 +91,7 @@ function buscarPosicoesAcoes(PDO $conexao, $idUsuario)
             ON a.id_ativo = ii.id_ativo
 
         WHERE c.id_usuario = :id_usuario
+          AND ii.id_carteira = :id_carteira
           AND a.categoria_ativo = 'Ações'
           AND ii.quantidade_item > 0
 
@@ -100,7 +101,8 @@ function buscarPosicoesAcoes(PDO $conexao, $idUsuario)
     $stmt = $conexao->prepare($sql);
 
     $stmt->execute([
-        ':id_usuario' => $idUsuario
+        ':id_usuario' => $idUsuario,
+        ':id_carteira' => $idCarteira
     ]);
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
