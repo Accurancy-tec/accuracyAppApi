@@ -1,11 +1,12 @@
 <?php
 require_once __DIR__ . "/../Repositories/CarteiraRepository.php";
+require_once __DIR__ . "/../Controllers/BrapiController.php";
 
-function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
+function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): array
 {
     try {
         // 1. Buscar as posições de ações do usuário no banco.
-        $posicoes = buscarPosicoesAcoes($conexao, $idUsuario);
+        $posicoes = buscarPosicoesAcoes($conexao, $idUsuario, $idCarteira);
 
         // Resposta padrão para carteiras sem ações.
         $resumoVazio = [
@@ -33,20 +34,14 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
                 trim((string) ($posicao['ticker'] ?? ''))
             );
 
-            if (
-                $ticker === '' ||
-                !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $ticker)
-            ) {
+            if ($ticker === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $ticker)) {
                 continue;
             }
 
             $quantidade = $posicao['quantidade'] ?? null;
             $precoMedio = $posicao['preco_medio'] ?? null;
 
-            if (
-                !is_numeric($quantidade) ||
-                !is_numeric($precoMedio)
-            ) {
+            if (!is_numeric($quantidade) || !is_numeric($precoMedio)) {
                 continue;
             }
 
@@ -80,7 +75,7 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
         if (empty($resultadoBrapi['ok'])) {
             error_log(
                 'Erro ao consultar patrimônio na brapi: ' .
-                ($resultadoBrapi['error'] ?? 'Erro desconhecido')
+                    ($resultadoBrapi['error'] ?? 'Erro desconhecido')
             );
 
             return [
@@ -112,6 +107,13 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
             $cotacoes = [];
         }
 
+        //error_log("TICKERS ENVIADOS: " . json_encode($tickers));
+
+        /*error_log("RESPOSTA BRAPI: " . json_encode(
+            $dadosBrapi,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+        ));*/
+
         // 5. Indexar as cotações pelo ticker.
         $cotacoesPorTicker = [];
 
@@ -129,6 +131,7 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
             }
         }
 
+
         // 6. Calcular o patrimônio de cada ação.
         $acoes = [];
 
@@ -140,12 +143,8 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
 
             $precoAtual = null;
 
-            if (
-                is_array($cotacao) &&
-                isset($cotacao['regularMarketPrice']) &&
-                is_numeric($cotacao['regularMarketPrice'])
-            ) {
-                $precoAtual = (float) $cotacao['regularMarketPrice'];
+            if (is_array($cotacao) && isset($cotacao['data']['regularMarketPrice']) && is_numeric($cotacao['data']['regularMarketPrice'])) {
+                $precoAtual = (float) $cotacao['data']['regularMarketPrice'];
             }
 
             $quantidadeTotal = 0.0;
@@ -190,12 +189,11 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
 
             $valorAtualAcao = $quantidadeTotal * $precoAtual;
 
-            $lucroPrejuizo =
-                $valorAtualAcao - $valorInvestidoAcao;
+            $lucroPrejuizo = $valorAtualAcao - $valorInvestidoAcao;
 
             $rentabilidade = $valorInvestidoAcao > 0
                 ? ($lucroPrejuizo / $valorInvestidoAcao) * 100
-                : 0.0;
+                : 0.0; 
 
             $acoes[] = [
                 'ticker' => $ticker,
@@ -234,11 +232,10 @@ function patrimonioCarteirasService(PDO $conexao,$idUsuario): array
                 'rentabilidade_percentual' => round($rentabilidadeTotal, 2)
             ]
         ];
-
     } catch (Throwable $erro) {
         error_log(
             'Erro em patrimonioCarteirasService: ' .
-            $erro->getMessage()
+                $erro->getMessage()
         );
 
         return [
