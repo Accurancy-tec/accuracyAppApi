@@ -6,6 +6,7 @@ require_once __DIR__ . "/../../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
+require_once __DIR__ . "/../Services/BrapiService.php";
 
 function criarCarteira()
 {
@@ -41,10 +42,36 @@ function buscarCarteiras()
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
 
+        if(empty($resultado)){
+           echo json_encode([
+            'success' => false,
+            'message' => "Nenhuma carteira encontrada",
+            'resultado' => []
+           ]);
+        }
+
+        foreach($resultado as &$resultados){
+
+            $id_carteira = $resultados['id_carteira'];
+
+            $patrimonio = patrimonioCarteirasAcaoService($conexao, $id_usuario, $id_carteira);
+
+            $resultados['total_investido'] = $patrimonio['resumo']['total_investido'] ?? 0;
+
+            $resultados['patrimonio_atual'] = $patrimonio['resumo']['patrimonio_atual'] ?? 0;
+
+            $resultados['lucro_prejuizo'] = $patrimonio['resumo']['lucro_prejuizo'] ?? 0;
+
+            $resultados['rentabilidade_percentual'] = $patrimonio['resumo']['rentabilidade_percentual'] ?? 0;
+        }
+
+        unset($resultados);
+
         echo json_encode([
             "success" => true,
             "carteiras" => $resultado
         ]);
+
     } catch (PDOException $e) {
         echo json_encode([
             "success" => false,

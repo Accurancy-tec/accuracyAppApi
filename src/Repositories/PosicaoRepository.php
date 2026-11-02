@@ -1,7 +1,7 @@
 <?php
 
 // Atualiza item_investimento da carteira, depois do aporte
- 
+
 function atualizarPosicao(PDO $conexao, $idCarteira, $idAtivo, $tipoAporte, $quantidade, $valorTotal)
 {
     // Dividendo é só dinheiro recebido: não entra nem sai cota da carteira.
@@ -66,4 +66,3 @@ function buscarPosicoes(PDO $conexao, $idCarteira)
 
     return $consulta->fetchAll(PDO::FETCH_ASSOC);
 }
-?>
