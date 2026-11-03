@@ -2,9 +2,9 @@
 
 require_once __DIR__ . "/../Repositories/CarteiraRepository.php";
 
-function criarCarteiraService(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira)
+function criarCarteiraService(PDO $conexao, $idUsuario, $nomeCarteira, $estilo_carteira, $meta_carteira, $tipoCarteira)
 {
-    return registrarCarteira($conexao, $idUsuario, $nomeCarteira, $tipoCarteira); 
+    return registrarCarteira($conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $estilo_carteira, $meta_carteira); 
 }
 
 function carteiraPertenceAoUsuarioService(PDO $conexao, $idCarteira, $idUsuario){
