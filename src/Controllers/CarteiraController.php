@@ -18,8 +18,10 @@ function criarCarteira()
         $idUser = autenticar();
         $nameWallet = $dados['nome_carteira'];
         $typeWallet = $dados['tipo_carteira'];
+        $walletStyle = $dados['estilo_carteira'];
+        $walletGoals = $dados['meta_carteira'];
 
-        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet);
+        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $walletGoals, $walletStyle);
 
         echo json_encode([
             "success" => true,
@@ -54,7 +56,10 @@ function buscarCarteiras()
 
             $id_carteira = $resultados['id_carteira'];
 
+            // Puxando do brapiService
             $patrimonio = patrimonioCarteirasAcaoService($conexao, $id_usuario, $id_carteira);
+
+            //$resultados['meta_carteira'] = $patrimonio['meta_carteira'] ?? 0;
 
             $resultados['total_investido'] = $patrimonio['resumo']['total_investido'] ?? 0;
 
@@ -63,6 +68,7 @@ function buscarCarteiras()
             $resultados['lucro_prejuizo'] = $patrimonio['resumo']['lucro_prejuizo'] ?? 0;
 
             $resultados['rentabilidade_percentual'] = $patrimonio['resumo']['rentabilidade_percentual'] ?? 0;
+
         }
 
         unset($resultados);

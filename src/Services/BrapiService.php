@@ -13,7 +13,8 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
             'total_investido' => 0,
             'patrimonio_atual' => 0,
             'lucro_prejuizo' => 0,
-            'rentabilidade_percentual' => 0
+            'rentabilidade_percentual' => 0,
+            'meta_carteira' => 0
         ];
 
         if (empty($posicoes)) {
