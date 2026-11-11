@@ -59,8 +59,6 @@ function buscarCarteiras()
             // Puxando do brapiService
             $patrimonio = patrimonioCarteirasAcaoService($conexao, $id_usuario, $id_carteira);
 
-            //$resultados['meta_carteira'] = $patrimonio['meta_carteira'] ?? 0;
-
             $resultados['total_investido'] = $patrimonio['resumo']['total_investido'] ?? 0;
 
             $resultados['patrimonio_atual'] = $patrimonio['resumo']['patrimonio_atual'] ?? 0;
@@ -303,5 +301,45 @@ function buscarPosicaoAtivoUsuario(): void
             'sucesso' => false,
             'mensagem' => 'Não foi possível consultar a posição do ativo.'
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}
+
+function excluirCarteira(): void {
+    global $conexao;
+
+    $id_usuario = 144; //autenticar();
+    $id_carteira =  95;//$_GET['id_carteira'] ?? null;
+
+    if(!$id_carteira){
+        echo json_encode([
+            'success' => false,
+            'message' => "ID da carteira não fornecido"
+        ]);
+        exit;
+    }
+
+    try{
+    
+        $resultado = deletarCarteiraService($conexao, $id_usuario, $id_carteira);
+
+        if($resultado == false){
+            echo json_encode([
+                'success' => false,
+                'message' => "Erro ao excluir a carteira"
+            ]);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Carteira exluida com sucesso"
+        ]);
+    }
+    catch(Throwable $error){
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'message' => "Não foi possível conectar com o banco" . $error->getMessage()
+        ]);
     }
 }

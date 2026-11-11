@@ -110,3 +110,74 @@ function buscarPosicoesAcoes(PDO $conexao, $idUsuario, $idCarteira)
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+function deletarCarteira(PDO $conexao, $id_usuario, $id_carteira) {
+
+    try {
+
+        // Inicia a transação
+        $conexao->beginTransaction();
+
+        // Verifica se a carteira pertence ao usuário
+        $sql = "SELECT id_carteira
+                FROM carteira
+                WHERE id_carteira = :id_carteira
+                AND id_usuario = :id_usuario";
+
+        $stmt = $conexao->prepare($sql);
+
+        $stmt->execute([
+            ':id_carteira' => $id_carteira,
+            ':id_usuario' => $id_usuario
+        ]);
+
+        if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
+            throw new Exception("Carteira não encontrada.");
+        }
+
+        // Exclui os aportes
+        $sql = "DELETE FROM aporte
+                WHERE id_carteira = :id_carteira";
+
+        $stmt = $conexao->prepare($sql);
+
+        $stmt->execute([
+            ':id_carteira' => $id_carteira
+        ]);
+
+        // Exclui as posições dos investimentos
+        $sql = "DELETE FROM item_investimento
+                WHERE id_carteira = :id_carteira";
+
+        $stmt = $conexao->prepare($sql);
+
+        $stmt->execute([
+            ':id_carteira' => $id_carteira
+        ]);
+
+        // Exclui a carteira
+        $sql = "DELETE FROM carteira
+                WHERE id_carteira = :id_carteira
+                AND id_usuario = :id_usuario";
+
+        $stmt = $conexao->prepare($sql);
+
+        $stmt->execute([
+            ':id_carteira' => $id_carteira,
+            ':id_usuario' => $id_usuario
+        ]);
+
+        // Confirma todas as operações
+        $conexao->commit();
+
+        return true;
+
+    } catch (Exception $e) {
+
+        // Desfaz todas as operações caso ocorra algum erro
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+        throw $e;
+    }
+}

@@ -23,6 +23,7 @@ switch ($acao) {
         break;
 
     case 'excluir-carteira':
+        excluirCarteira();
         break;
     
     case 'posicao-ativo':
