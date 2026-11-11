@@ -307,8 +307,8 @@ function buscarPosicaoAtivoUsuario(): void
 function excluirCarteira(): void {
     global $conexao;
 
-    $id_usuario = 144; //autenticar();
-    $id_carteira =  95;//$_GET['id_carteira'] ?? null;
+    $id_usuario = autenticar();
+    $id_carteira = $_GET['id_carteira'] ?? null;
 
     if(!$id_carteira){
         echo json_encode([
