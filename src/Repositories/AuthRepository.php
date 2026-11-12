@@ -172,7 +172,8 @@ function usarToken(PDO $conexao, $token)
     return $stmtUsarToken->execute();
 }
 
-function verificarEmail(PDO $conexao, $idUsuario){
+function verificarEmail(PDO $conexao, $idUsuario)
+{
     $sqlVerificarEmail = "
         UPDATE usuario
         SET
@@ -181,15 +182,118 @@ function verificarEmail(PDO $conexao, $idUsuario){
         WHERE id_usuario = :id_usuario
     ";
 
-        $stmtVerificarEmail = $conexao->prepare(
-            $sqlVerificarEmail
-        );
+    $stmtVerificarEmail = $conexao->prepare(
+        $sqlVerificarEmail
+    );
 
-        $stmtVerificarEmail->bindValue(
-            ":id_usuario",
-            $idUsuario,
-            PDO::PARAM_INT
-        );
+    $stmtVerificarEmail->bindValue(
+        ":id_usuario",
+        $idUsuario,
+        PDO::PARAM_INT
+    );
 
-        $stmtVerificarEmail->execute();
+    $stmtVerificarEmail->execute();
+}
+function perfilBuscarUsuario(PDO $c, $id)
+{
+    $st = $c->prepare("SELECT id_usuario, nome_usuario, email_usuario, foto_usuario
+                       FROM usuario WHERE id_usuario = :id LIMIT 1");
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    $st->execute();
+    return $st->fetch(PDO::FETCH_ASSOC);
+}
+
+function perfilSalvarFoto(PDO $c, $id, $url)
+{
+    $st = $c->prepare("UPDATE usuario SET foto_usuario = :url, atualizado_em = NOW()
+                       WHERE id_usuario = :id");
+    $st->bindValue(":url", $url);
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    return $st->execute();
+}
+
+function perfilEmailEmUso(PDO $c, $email, $idIgnorar)
+{
+    $st = $c->prepare("SELECT 1 FROM usuario
+                       WHERE LOWER(email_usuario) = LOWER(:email) AND id_usuario <> :id LIMIT 1");
+    $st->bindValue(":email", $email);
+    $st->bindValue(":id", $idIgnorar, PDO::PARAM_INT);
+    $st->execute();
+    return (bool) $st->fetchColumn();
+}
+
+function perfilCriarToken(PDO $c, $id, $tipo, $hash, $novoEmail = null)
+{
+    // invalida códigos anteriores do mesmo tipo
+    $st = $c->prepare("UPDATE token_alteracao_usuario SET usado_em = NOW()
+                       WHERE id_usuario = :id AND tipo_token = :tipo AND usado_em IS NULL");
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    $st->bindValue(":tipo", $tipo);
+    $st->execute();
+
+    $st = $c->prepare("INSERT INTO token_alteracao_usuario
+                         (id_usuario, tipo_token, novo_email, token_hash, expira_em)
+                       VALUES (:id, :tipo, :novo_email, :hash, NOW() + INTERVAL '10 minutes')");
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    $st->bindValue(":tipo", $tipo);
+    $st->bindValue(":novo_email", $novoEmail);
+    $st->bindValue(":hash", $hash);
+    return $st->execute();
+}
+
+function perfilBuscarToken(PDO $c, $id, $tipo)
+{
+    $st = $c->prepare("SELECT id_token, token_hash, novo_email, tentativas,
+                              (expira_em > NOW()) AS valido,
+                              EXTRACT(EPOCH FROM (NOW() - criado_em)) AS segundos
+                       FROM token_alteracao_usuario
+                       WHERE id_usuario = :id AND tipo_token = :tipo AND usado_em IS NULL
+                       ORDER BY criado_em DESC LIMIT 1");
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    $st->bindValue(":tipo", $tipo);
+    $st->execute();
+    return $st->fetch(PDO::FETCH_ASSOC);
+}
+
+function perfilAnotarTentativa(PDO $c, $idToken)
+{
+    $st = $c->prepare("UPDATE token_alteracao_usuario SET tentativas = tentativas + 1
+                       WHERE id_token = :id");
+    $st->bindValue(":id", $idToken, PDO::PARAM_INT);
+    return $st->execute();
+}
+
+function perfilUsarToken(PDO $c, $idToken)
+{
+    $st = $c->prepare("UPDATE token_alteracao_usuario SET usado_em = NOW() WHERE id_token = :id");
+    $st->bindValue(":id", $idToken, PDO::PARAM_INT);
+    return $st->execute();
+}
+
+function perfilAtualizarSenha(PDO $c, $id, $hash)
+{
+    $st = $c->prepare("UPDATE usuario SET senha_usuario = :hash, atualizado_em = NOW()
+                       WHERE id_usuario = :id");
+    $st->bindValue(":hash", $hash);
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    return $st->execute();
+}
+
+function perfilAtualizarEmail(PDO $c, $id, $email)
+{
+    $st = $c->prepare("UPDATE usuario
+                       SET email_usuario = :email, email_verificado_usuario = TRUE, atualizado_em = NOW()
+                       WHERE id_usuario = :id");
+    $st->bindValue(":email", $email);
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    return $st->execute();
+}
+
+// Depois de trocar a senha, derruba as sessões (refresh tokens) abertas do app
+function perfilRevogarSessoes(PDO $c, $id)
+{
+    $st = $c->prepare("UPDATE Sessao_Usuario SET revogado_em = NOW()
+                       WHERE id_usuario = :id AND revogado_em IS NULL");
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    return $st->execute();
 }

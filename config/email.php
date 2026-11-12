@@ -113,3 +113,44 @@ function enviarCodigoBrevo($email, $codigo)
 
     return true;
 }
+function enviarEmailBrevo($destino, $assunto, $html)
+{
+    $apiKey    = $_ENV["BREVO_API_KEY"]   ?? getenv("BREVO_API_KEY");
+    $remetente = $_ENV["BREVO_REMETENTE"] ?? getenv("BREVO_REMETENTE");
+
+    if (empty($apiKey) || empty($remetente)) {
+        error_log("BREVO: variáveis de ambiente vazias");
+        return false;
+    }
+
+    $ch = curl_init("https://api.brevo.com/v3/smtp/email");
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_HTTPHEADER     => [
+            "accept: application/json",
+            "content-type: application/json",
+            "api-key: " . $apiKey,
+        ],
+        CURLOPT_POSTFIELDS     => json_encode([
+            "sender"      => ["name" => "Accuracy", "email" => $remetente],
+            "to"          => [["email" => $destino]],
+            "subject"     => $assunto,
+            "htmlContent" => $html,
+        ]),
+    ]);
+
+    $resposta = curl_exec($ch);
+    $erro     = curl_error($ch);
+    $status   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($erro || $status < 200 || $status >= 300) {
+        error_log("ERRO BREVO ($status): " . ($erro ?: $resposta));
+        return false;
+    }
+
+    return true;
+}
