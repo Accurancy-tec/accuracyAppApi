@@ -27,11 +27,15 @@ switch ($acao) {
     case 'loginSite':
         loginSite();
         break;
-        
+
+    case 'loginLinkedin':
+        loginLinkedin();
+        break;
+
     case 'loginGoogle':
         loginGoogle();
         break;
-        
+
     case 'registrarNovoUsuario':
         registrarUsuario();
         break;
@@ -46,6 +50,30 @@ switch ($acao) {
 
     case 'resend-verification':
         resendVerification();
+        break;
+
+    case 'perfilObter':
+        perfilObter();
+        break;
+
+    case 'perfilFoto':
+        perfilFoto();
+        break;
+
+    case 'perfilSolicitarTrocaSenha':
+        perfilSolicitarTrocaSenha();
+        break;
+
+    case 'perfilConfirmarTrocaSenha':
+        perfilConfirmarTrocaSenha();
+        break;
+
+    case 'perfilSolicitarTrocaEmail':
+        perfilSolicitarTrocaEmail();
+        break;
+
+    case 'perfilConfirmarTrocaEmail':
+        perfilConfirmarTrocaEmail();
         break;
 
     default:
