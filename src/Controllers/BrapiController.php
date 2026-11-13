@@ -119,7 +119,7 @@ function historicoAcoes(): void
 
     $symbol = strtoupper(trim((string) ($_GET["symbol"] ?? "")));
     $range = trim((string) ($_GET["range"] ?? "3mo"));
-    $rangesPermitidos = ["7d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"];
+    $rangesPermitidos = ["1d", "7d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"];
 
     if ($symbol === "" || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
         responderErroBrapi("Ticker ausente ou inválido", 400);
@@ -133,7 +133,7 @@ function historicoAcoes(): void
     $resultado = brapiRequest("v2/stocks/historical", [
         "symbols" => $symbol,
         "range" => $range,
-        "interval" => "1d",
+        "interval" => $range === "1d" ? "5m" : "1d",
         "sortOrder" => "asc"
     ]);
 
@@ -693,7 +693,7 @@ function historicoFiis(): void
     header('Content-Type: application/json; charset=UTF-8');
     $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
     $range = trim((string) ($_GET['range'] ?? '3mo'));
-    $intervalos = ['7d' => '-7 days', '1mo' => '-1 month', '3mo' => '-3 months',
+    $intervalos = ['1d' => '-7 days', '7d' => '-7 days', '1mo' => '-1 month', '3mo' => '-3 months',
         '6mo' => '-6 months', '1y' => '-1 year'];
 
     if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
@@ -739,6 +739,18 @@ function historicoFiis(): void
         $requested = (string) ($fii['symbol'] ?? $symbol);
         $points = $fii['historicalDataPrice'] ?? [];
         if (!is_array($points)) $points = [];
+
+        // O historico de FIIs e diario. Para Hoje, pega as duas ultimas sessoes
+        // disponiveis na ultima semana, inclusive apos fins de semana e feriados.
+        if ($range === '1d' && !empty($points)) {
+            usort($points, static function ($a, $b) {
+                $dataA = is_array($a) && is_numeric($a['date'] ?? null) ? (int) $a['date'] : 0;
+                $dataB = is_array($b) && is_numeric($b['date'] ?? null) ? (int) $b['date'] : 0;
+                return $dataA <=> $dataB;
+            });
+            $points = array_slice($points, -2);
+        }
+
         $results[] = [
             'requestedSymbol' => $symbol,
             'symbol' => $requested,
