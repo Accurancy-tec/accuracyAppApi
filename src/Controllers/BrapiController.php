@@ -356,6 +356,122 @@ function listarAcoesNacionais(): void
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
+function listarAtivosInternacionais(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
+    $limit = filter_var($_GET['limit'] ?? '20', FILTER_VALIDATE_INT);
+    $search = trim((string) ($_GET['search'] ?? ''));
+    $sortBy = trim((string) ($_GET['sortBy'] ?? 'volume'));
+    $sortOrder = strtolower(trim((string) ($_GET['sortOrder'] ?? 'desc')));
+
+    if ($page === false || $page === null || $limit === false || $limit === null
+        || $page < 1 || $limit < 1 || $limit > 20) {
+        responderErroBrapi('PÃ¡gina invÃ¡lida ou limite fora do intervalo (1 a 20).', 400);
+        return;
+    }
+
+    $ordenacoesPermitidas = ['name', 'close', 'change', 'change_abs', 'volume', 'market_cap_basic'];
+    if (!in_array($sortBy, $ordenacoesPermitidas, true)
+        || !in_array($sortOrder, ['asc', 'desc'], true)) {
+        responderErroBrapi('CritÃ©rio de ordenaÃ§Ã£o invÃ¡lido.', 400);
+        return;
+    }
+    if (strlen($search) > 100) {
+        responderErroBrapi('Termo de pesquisa muito longo.', 400);
+        return;
+    }
+
+    $fontes = [
+        ['type' => 'bdr', 'subType' => null, 'label' => 'BDR'],
+        ['type' => 'fund', 'subType' => 'etf', 'label' => 'ETF'],
+    ];
+    $ativos = [];
+
+    foreach ($fontes as $fonte) {
+        $query = [
+            'type' => $fonte['type'],
+            'page' => 1,
+            'limit' => 2000,
+            'sortBy' => $sortBy,
+            'sortOrder' => $sortOrder,
+        ];
+        if ($fonte['subType'] !== null) {
+            $query['subType'] = $fonte['subType'];
+        }
+        if ($search !== '') {
+            $query['search'] = $search;
+        }
+
+        $resposta = brapiRequest('quote/list', $query);
+        if (!$resposta['ok']) {
+            $status = (int) ($resposta['status'] ?? 502);
+            responderErroBrapi('NÃ£o foi possÃ­vel consultar BDRs e ETFs na brapi.',
+                $status >= 400 && $status < 600 ? $status : 502);
+            return;
+        }
+
+        $dados = json_decode((string) $resposta['body'], true);
+        if (!is_array($dados) || !isset($dados['stocks']) || !is_array($dados['stocks'])) {
+            responderErroBrapi('Resposta invÃ¡lida da brapi ao listar ativos internacionais.');
+            return;
+        }
+
+        foreach ($dados['stocks'] as $item) {
+            if (!is_array($item)) continue;
+            $symbol = strtoupper(trim((string) ($item['stock'] ?? $item['symbol'] ?? '')));
+            if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) continue;
+
+            $name = $item['name'] ?? $item['longName'] ?? $item['shortName'] ?? $symbol;
+            $close = $item['close'] ?? $item['regularMarketPrice'] ?? null;
+            $change = $item['change'] ?? $item['regularMarketChangePercent'] ?? null;
+            $volume = $item['volume'] ?? $item['regularMarketVolume'] ?? null;
+            $marketCap = $item['market_cap'] ?? $item['marketCap'] ?? null;
+            $logo = $item['logo'] ?? $item['logourl'] ?? $item['logoUrl'] ?? null;
+
+            $ativos[] = [
+                'stock' => $symbol,
+                'name' => (is_string($name) && trim($name) !== '' ? trim($name) : $symbol)
+                    . ' (' . $fonte['label'] . ')',
+                'close' => is_numeric($close) ? (float) $close : null,
+                'change' => is_numeric($change) ? (float) $change : null,
+                'volume' => is_numeric($volume) ? (int) $volume : null,
+                'marketCap' => is_numeric($marketCap) ? (float) $marketCap : null,
+                'logo' => is_string($logo) && trim($logo) !== '' ? $logo : null,
+            ];
+        }
+    }
+
+    $campo = $sortBy === 'market_cap_basic' ? 'marketCap'
+        : ($sortBy === 'change_abs' ? 'change' : $sortBy);
+    usort($ativos, static function ($a, $b) use ($campo, $sortOrder) {
+        $va = $a[$campo] ?? null;
+        $vb = $b[$campo] ?? null;
+        if ($campo === 'name' || $campo === 'stock') {
+            $comparacao = strnatcasecmp((string) $va, (string) $vb);
+        } else {
+            $comparacao = (float) ($va ?? 0) <=> (float) ($vb ?? 0);
+        }
+        return $sortOrder === 'asc' ? $comparacao : -$comparacao;
+    });
+
+    $total = count($ativos);
+    $totalPaginas = max(1, (int) ceil($total / $limit));
+    $pagina = min($page, $totalPaginas);
+    $paginaAtivos = array_slice($ativos, ($pagina - 1) * $limit, $limit);
+
+    echo json_encode([
+        'success' => true,
+        'stocks' => $paginaAtivos,
+        'paginacao' => [
+            'paginaAtual' => $pagina,
+            'totalPaginas' => $totalPaginas,
+            'totalAtivos' => $total,
+            'temProximaPagina' => $pagina < $totalPaginas,
+        ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
 function listarFiis(): void
 {
     header('Content-Type: application/json; charset=UTF-8');

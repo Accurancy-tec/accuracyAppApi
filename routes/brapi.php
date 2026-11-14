@@ -17,6 +17,9 @@ switch ($acao) {
     case 'historico-acoes':
         historicoAcoes();
         break;
+    case 'listar-internacionais':
+        listarAtivosInternacionais();
+        break;
     case 'listar-fiis':
         listarFiis();
         break;
