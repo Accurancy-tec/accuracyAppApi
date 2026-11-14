@@ -130,10 +130,30 @@ function fazerAporte()
             $conexao->rollBack();
         }
 
+        // Registra os detalhes tecnicos no log do servidor, sem expo-los ao aplicativo.
+        $detalhesErro = sprintf(
+            "AportesController::fazerAporte | classe=%s | codigo=%s | arquivo=%s:%d | mensagem=%s",
+            get_class($erro),
+            (string) $erro->getCode(),
+            $erro->getFile(),
+            $erro->getLine(),
+            $erro->getMessage()
+        );
+        error_log($detalhesErro . PHP_EOL . $erro->getTraceAsString());
+
+        // A excecao do PostgreSQL continua bloqueando a compra; apenas simplificamos o Toast.
+        if (stripos($erro->getMessage(), "saldo insuficiente") !== false) {
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "Saldo insuficiente"
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
         echo json_encode([
             "sucesso" => false,
-            "mensagem" => "Erro ao salvar: " . $erro->getMessage()
-        ]);
+            "mensagem" => "NÃ£o foi possÃ­vel concluir a operaÃ§Ã£o. Tente novamente."
+        ], JSON_UNESCAPED_UNICODE);
     }
 }
 
