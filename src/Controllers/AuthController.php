@@ -851,4 +851,5 @@ function perfilConfirmarTrocaEmail()
         );
     }
  
-    perfilResponder(200, ["success" => true, "message" => "E-mail alterado com sucesso.", "email_usuario" => $novoEmail]);
+       perfilResponder(200, ["success" => true, "message" => "E-mail alterado com sucesso.", "email_usuario" => $novoEmail]);
+}

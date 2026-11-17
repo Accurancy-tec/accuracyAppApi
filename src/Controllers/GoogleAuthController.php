@@ -78,17 +78,14 @@ class GoogleAuthController
     }
 
     /**
-     * PREENCHER: use aqui o MESMO código que o auth/loginSite usa
-     * para gerar o JWT, de forma que o token do Google seja igual
-     * ao do login normal.
-     *
-     * $usuario traz: id_usuario, nome_usuario, email_usuario.
+     * Mesmo JWT do auth/loginSite (criarToken está em Middleware/Authentication.php),
+     * então o token do Google é idêntico ao do login normal.
      */
     private function gerarToken(array $usuario): string
     {
-        throw new \RuntimeException(
-            'Falta preencher GoogleAuthController::gerarToken() com a geração de JWT do loginSite.'
-        );
+        require_once __DIR__ . '/../Middleware/Authentication.php';
+
+        return criarToken($usuario['id_usuario']);
     }
 
     private function responder(int $status, array $corpo): void
