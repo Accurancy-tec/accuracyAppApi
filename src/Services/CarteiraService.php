@@ -18,3 +18,7 @@ function getCarteirasDoUsuarioService(PDO $conexao, $id_usuario){
 function deletarCarteiraService(PDO $conexao, $id_usuario, $id_carteira){
     return deletarCarteira($conexao, $id_usuario, $id_carteira);
 }
+
+function adicionarSaldoService(PDO $conexao, $id_usuario, $valor){
+    return adicionarSaldoRepository($conexao, $id_usuario, $valor);
+}
