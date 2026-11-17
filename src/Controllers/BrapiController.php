@@ -130,21 +130,54 @@ function historicoAcoes(): void
         return;
     }
 
-    $resultado = brapiRequest("v2/stocks/historical", [
-        "symbols" => $symbol,
-        "range" => $range,
-        "interval" => $range === "1d" ? "5m" : "1d",
-        "sortOrder" => "asc"
-    ]);
+    $buscarHistorico = static function (string $rangeBusca, string $intervalo) use ($symbol): array {
+        return brapiRequest("v2/stocks/historical", [
+            "symbols" => $symbol,
+            "range" => $rangeBusca,
+            "interval" => $intervalo,
+            "sortOrder" => "asc"
+        ]);
+    };
+    $extrairDados = static function (array $resposta): ?array {
+        if (!$resposta["ok"]) {
+            return null;
+        }
+        $json = json_decode((string) $resposta["body"], true);
+        return is_array($json) && isset($json["results"]) && is_array($json["results"]) ? $json : null;
+    };
+    $temPontos = static function (?array $json): bool {
+        $pontos = $json["results"][0]["data"]["historicalDataPrice"] ?? [];
+        return is_array($pontos) && count($pontos) > 0;
+    };
 
-    if (!$resultado["ok"]) {
-        responderErroBrapi("Não foi possível consultar o histórico de preços na Brapi");
-        return;
+    $resultado = $buscarHistorico($range, $range === "1d" ? "5m" : "1d");
+    $dados = $extrairDados($resultado);
+
+    // "Hoje" usa candles de 5 minutos. Nem todo ativo (ex.: alguns ETFs/fundos) tem
+    // dado intradiario; nesse caso mostra as duas ultimas sessoes com candles diarios.
+    if ($range === "1d" && !$temPontos($dados)) {
+        error_log("Historico intradiario indisponivel para " . $symbol
+            . " (HTTP " . (int) ($resultado["status"] ?? 0) . "); usando candles diarios.");
+        $resultado = $buscarHistorico("7d", "1d");
+        $dados = $extrairDados($resultado);
+        if ($temPontos($dados)) {
+            $pontos = $dados["results"][0]["data"]["historicalDataPrice"];
+            usort($pontos, static function ($a, $b) {
+                $dataA = is_array($a) && is_numeric($a["date"] ?? null) ? (int) $a["date"] : 0;
+                $dataB = is_array($b) && is_numeric($b["date"] ?? null) ? (int) $b["date"] : 0;
+                return $dataA <=> $dataB;
+            });
+            $dados["results"][0]["data"]["historicalDataPrice"] = array_slice($pontos, -2);
+        }
     }
 
-    $dados = json_decode($resultado["body"], true);
-    if (!is_array($dados) || !isset($dados["results"]) || !is_array($dados["results"])) {
-        responderErroBrapi("Resposta de histórico em formato inválido");
+    if ($dados === null) {
+        $statusBrapi = (int) ($resultado["status"] ?? 502);
+        // 401 vira 502 para o app nao confundir com sessao expirada do usuario.
+        $statusResposta = ($statusBrapi >= 400 && $statusBrapi < 600 && $statusBrapi !== 401)
+            ? $statusBrapi
+            : 502;
+        responderErroBrapi("Não foi possível consultar o histórico de preços na Brapi", $statusResposta);
         return;
     }
 
@@ -881,6 +914,484 @@ function historicoFiis(): void
         'took' => $dados['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
+/**
+ * Curva de vencimentos de um ativo (ex.: WIN, DI1) com a cotacao do ultimo pregao.
+ * Cache de 10 min em arquivo temporario. Retorna null se a brapi falhar.
+ */
+function futurosCurvaDoAtivo(string $ativo): ?array
+{
+    $arquivo = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'accuracy_futuros_' . $ativo . '.json';
+    if (is_file($arquivo) && (time() - (int) filemtime($arquivo)) < 600) {
+        $emCache = json_decode((string) file_get_contents($arquivo), true);
+        if (is_array($emCache)) {
+            return $emCache;
+        }
+    }
+
+    $curva = brapiRequest('v2/futures/term-structure', ['asset' => $ativo]);
+    if (!$curva['ok']) {
+        error_log('Futuros: term-structure falhou para ' . $ativo . ' (HTTP ' . (int) ($curva['status'] ?? 0) . ')');
+        return null;
+    }
+
+    $dados = json_decode((string) $curva['body'], true);
+    $contratos = is_array($dados) && is_array($dados['contracts'] ?? null) ? $dados['contracts'] : [];
+    if (count($contratos) > 0) {
+        @file_put_contents($arquivo, json_encode($contratos), LOCK_EX);
+    }
+    return $contratos;
+}
+
+/**
+ * Lista padrao de futuros: so contratos COM cotacao dos ativos principais, no mesmo formato
+ * da resposta de v2/futures/list (chaves "futures" e "pagination").
+ */
+function futurosPrincipaisComoLista(int $page, int $limit, string $sortBy, string $sortOrder, string $segment): ?array
+{
+    $ativos = [
+        'WIN' => 'financial',
+        'WDO' => 'financial',
+        'DI1' => 'financial',
+        'DAP' => 'financial',
+        'BGI' => 'agribusiness',
+        'CCM' => 'agribusiness',
+        'ICF' => 'agribusiness',
+        'SJC' => 'agribusiness',
+    ];
+
+    $positivo = static function ($valor): bool {
+        return is_numeric($valor) && (float) $valor > 0;
+    };
+
+    $contratos = [];
+    $algumaRespostaOk = false;
+    foreach ($ativos as $ativo => $segmentoDoAtivo) {
+        if ($segment !== '' && $segment !== $segmentoDoAtivo) {
+            continue;
+        }
+        $curva = futurosCurvaDoAtivo($ativo);
+        if ($curva === null) {
+            continue;
+        }
+        $algumaRespostaOk = true;
+        foreach ($curva as $contrato) {
+            if (!is_array($contrato)) {
+                continue;
+            }
+            $taxa = ($contrato['quotationType'] ?? '') === 'rate';
+            $temCotacao = $taxa
+                ? ($positivo($contrato['settlementRate'] ?? null) || $positivo($contrato['close'] ?? null))
+                : ($positivo($contrato['settlement'] ?? null) || $positivo($contrato['close'] ?? null));
+            if ($temCotacao) {
+                $contratos[] = $contrato;
+            }
+        }
+    }
+
+    if (!$algumaRespostaOk) {
+        return null;
+    }
+
+    $chave = static function (array $c) use ($sortBy): string {
+        if ($sortBy === 'symbol') {
+            return (string) ($c['symbol'] ?? '');
+        }
+        if ($sortBy === 'underlyingAsset') {
+            return (string) ($c['underlyingAsset'] ?? '') . '|' . (string) ($c['expirationDate'] ?? '');
+        }
+        return (string) ($c['expirationDate'] ?? '') . '|' . (string) ($c['symbol'] ?? '');
+    };
+    $sentido = $sortOrder === 'desc' ? -1 : 1;
+    usort($contratos, static function (array $a, array $b) use ($chave, $sentido): int {
+        return $sentido * strnatcasecmp($chave($a), $chave($b));
+    });
+
+    $total = count($contratos);
+    $totalPages = max(1, (int) ceil($total / max(1, $limit)));
+    $page = min(max(1, $page), $totalPages);
+
+    return [
+        'futures' => array_slice($contratos, ($page - 1) * $limit, $limit),
+        'pagination' => ['page' => $page, 'totalPages' => $totalPages, 'total' => $total],
+    ];
+}
+
+function listarContratosFuturos(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+
+    $page = filter_var($_GET['page'] ?? '1', FILTER_VALIDATE_INT);
+    $limit = filter_var($_GET['limit'] ?? '20', FILTER_VALIDATE_INT);
+    $search = strtoupper(trim((string) ($_GET['search'] ?? '')));
+    $sortBy = trim((string) ($_GET['sortBy'] ?? 'expirationDate'));
+    $sortOrder = strtolower(trim((string) ($_GET['sortOrder'] ?? 'asc')));
+    $segment = strtolower(trim((string) ($_GET['segment'] ?? '')));
+
+    if ($page === false || $page === null || $page < 1 || $limit === false || $limit === null || $limit < 1 || $limit > 20) {
+        responderErroBrapi('Pagina invalida ou limite fora do intervalo (1 a 20).', 400);
+        return;
+    }
+    if (!in_array($sortBy, ['symbol', 'expirationDate', 'underlyingAsset'], true)
+        || !in_array($sortOrder, ['asc', 'desc'], true)) {
+        responderErroBrapi('Criterio de ordenacao de contratos invalido.', 400);
+        return;
+    }
+
+    if ($segment !== '' && !in_array($segment, ['financial', 'agribusiness'], true)) {
+        responderErroBrapi('Segmento de contratos invalido.', 400);
+        return;
+    }
+
+    $query = ['page' => $page, 'limit' => $limit, 'sortBy' => $sortBy, 'sortOrder' => $sortOrder];
+    if ($segment !== '') {
+        $query['segment'] = $segment;
+    }
+    if ($search !== '') {
+        if (preg_match('/^(.+?)[FGHJKMNQUVXZ]\d{2}$/', $search, $match)) {
+            $search = $match[1];
+        }
+        if (!preg_match('/^[A-Z0-9]{2,6}$/', $search)) {
+            responderErroBrapi('Pesquise pelo codigo do ativo ou contrato (ex.: WIN, WDO, WINZ26).', 400);
+            return;
+        }
+        $query['asset'] = $search;
+    }
+
+    if ($search === '') {
+        // Sem busca: so contratos com cotacao dos ativos principais (term-structure).
+        $principais = futurosPrincipaisComoLista($page, $limit, $sortBy, $sortOrder, $segment);
+        $lista = $principais === null
+            ? ['ok' => false, 'status' => 502, 'body' => null]
+            : ['ok' => true, 'status' => 200, 'body' => json_encode($principais)];
+    } else {
+        $lista = brapiRequest('v2/futures/list', $query);
+    }
+    if (!$lista['ok']) {
+        $status = (int) ($lista['status'] ?? 502);
+        $mensagem = $status === 403
+            ? 'A listagem completa de futuros exige o plano Pro da brapi.'
+            : 'Nao foi possivel consultar os contratos futuros na brapi.';
+        responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
+        return;
+    }
+
+    $dadosLista = json_decode((string) $lista['body'], true);
+    if (!is_array($dadosLista) || !isset($dadosLista['futures']) || !is_array($dadosLista['futures'])) {
+        responderErroBrapi('Resposta invalida da brapi ao listar contratos futuros.');
+        return;
+    }
+
+    $contratos = [];
+    $symbols = [];
+    foreach ($dadosLista['futures'] as $future) {
+        if (!is_array($future)) {
+            continue;
+        }
+        $symbol = strtoupper(trim((string) ($future['symbol'] ?? '')));
+        if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+            continue;
+        }
+        $future['_symbol'] = $symbol;
+        $contratos[] = $future;
+        $symbols[] = $symbol;
+    }
+
+    // First attempt: one batch quote request for the page (brapi accepts up to 20 symbols).
+    $quotesBySymbol = [];
+    if ($symbols) {
+        $cotacoes = brapiRequest('v2/futures/quote', ['symbols' => implode(',', array_slice($symbols, 0, 20))]);
+        if (!$cotacoes['ok']) {
+            $status = (int) ($cotacoes['status'] ?? 502);
+            $mensagem = $status === 403
+                ? 'A cotacao de contratos futuros exige o plano Pro da brapi.'
+                : 'Nao foi possivel consultar as cotacoes dos contratos futuros.';
+            responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
+            return;
+        }
+
+        $dadosCotacoes = json_decode((string) $cotacoes['body'], true);
+        $quotes = is_array($dadosCotacoes) ? ($dadosCotacoes['quotes'] ?? []) : [];
+        if (is_array($quotes)) {
+            foreach ($quotes as $quote) {
+                if (!is_array($quote)) {
+                    continue;
+                }
+                $symbol = strtoupper(trim((string) ($quote['symbol'] ?? '')));
+                if ($symbol !== '') {
+                    $quotesBySymbol[$symbol] = $quote;
+                }
+            }
+        }
+    }
+
+    // Fallback: when the batch quote omits a contract or has no usable value,
+    // query the term structure once per underlying asset (not once per contract).
+    $assetsNeedingFallback = [];
+    foreach ($contratos as $future) {
+        $symbol = $future['_symbol'];
+        $quote = $quotesBySymbol[$symbol] ?? [];
+        $quotationType = strtolower((string) ($future['quotationType'] ?? $quote['quotationType'] ?? 'price'));
+        if ($quotationType === 'rate') {
+            $hasValue = is_numeric($quote['settlementRate'] ?? null) || is_numeric($quote['close'] ?? null);
+        } else {
+            $hasValue = is_numeric($quote['settlement'] ?? null) || is_numeric($quote['close'] ?? null);
+        }
+
+        if (!$hasValue) {
+            $asset = strtoupper(trim((string) ($future['underlyingAsset'] ?? '')));
+            if ($asset !== '' && preg_match('/^[A-Z0-9]{2,8}$/', $asset)) {
+                $assetsNeedingFallback[$asset] = true;
+            }
+        }
+    }
+
+    foreach (array_keys($assetsNeedingFallback) as $asset) {
+        $curva = brapiRequest('v2/futures/term-structure', ['asset' => $asset]);
+        if (!$curva['ok']) {
+            error_log('Brapi futuros: fallback term-structure indisponivel para ' . $asset
+                . ' (HTTP ' . (int) ($curva['status'] ?? 0) . ').');
+            continue;
+        }
+
+        $dadosCurva = json_decode((string) $curva['body'], true);
+        $contratosCurva = is_array($dadosCurva) ? ($dadosCurva['contracts'] ?? []) : [];
+        if (!is_array($contratosCurva)) {
+            continue;
+        }
+
+        foreach ($contratosCurva as $contratoCurva) {
+            if (!is_array($contratoCurva)) {
+                continue;
+            }
+            $symbolCurva = strtoupper(trim((string) ($contratoCurva['symbol'] ?? '')));
+            if ($symbolCurva !== '' && isset($quotesBySymbol[$symbolCurva])
+                && (is_numeric($quotesBySymbol[$symbolCurva]['settlement'] ?? null)
+                    || is_numeric($quotesBySymbol[$symbolCurva]['settlementRate'] ?? null)
+                    || is_numeric($quotesBySymbol[$symbolCurva]['close'] ?? null))) {
+                continue;
+            }
+            if ($symbolCurva !== '') {
+                $quotesBySymbol[$symbolCurva] = $contratoCurva;
+            }
+        }
+    }
+
+    $stocks = [];
+    foreach ($contratos as $future) {
+        $symbol = $future['_symbol'];
+        $quote = $quotesBySymbol[$symbol] ?? [];
+
+        $descricao = trim((string) ($future['assetDescription'] ?? 'Contrato futuro'));
+        if ($descricao === '') {
+            $descricao = 'Contrato futuro';
+        }
+
+        $vencimento = trim((string) ($future['expirationDate'] ?? ''));
+        if ($vencimento !== '') {
+            $dataVencimento = DateTimeImmutable::createFromFormat('!Y-m-d', $vencimento);
+            $descricao .= ' | Vencimento ' . ($dataVencimento instanceof DateTimeImmutable
+                ? $dataVencimento->format('d/m/Y')
+                : $vencimento);
+        }
+
+        $tipoCotacao = strtolower((string) ($future['quotationType'] ?? $quote['quotationType'] ?? 'price'));
+        $ehTaxa = $tipoCotacao === 'rate';
+        $priceLabel = null;
+        $preco = null;
+
+        if ($ehTaxa) {
+            // In DI/DAP, display the annual adjustment rate, not the BRL settlement amount.
+            $taxa = $quote['settlementRate'] ?? $quote['close'] ?? null;
+            if (is_numeric($taxa) && (float) $taxa > 0) {
+                $priceLabel = number_format((float) $taxa, 3, ',', '.') . '% a.a.';
+            } else {
+                $priceLabel = 'Sem cotação';
+            }
+        } else {
+            // Prefer official settlement; use the last trade only if settlement is absent.
+            $ajuste = $quote['settlement'] ?? null;
+            $ultimoNegocio = $quote['close'] ?? null;
+            // Rolagem (spread) pode ter valor zero ou negativo; nos demais, so valor > 0.
+            $ehRolagem = stripos((string) ($future['assetDescription'] ?? ''), 'rolagem') !== false;
+            $aceitaValor = static function ($valor) use ($ehRolagem): bool {
+                return is_numeric($valor) && ($ehRolagem || (float) $valor > 0);
+            };
+            if ($aceitaValor($ajuste)) {
+                $preco = (float) $ajuste;
+            } elseif ($aceitaValor($ultimoNegocio)) {
+                $preco = (float) $ultimoNegocio;
+            }
+            if ($preco !== null && $preco <= 0) {
+                // O app mostra "—" para preco <= 0; envia o texto pronto.
+                $priceLabel = 'R$ ' . number_format($preco, 2, ',', '.');
+            }
+            if ($preco === null) {
+                $priceLabel = 'Sem cotação';
+            }
+        }
+
+        $stocks[] = [
+            'stock' => $symbol,
+            'name' => $descricao,
+            'close' => $preco,
+            'change' => is_numeric($quote['oscillationPct'] ?? null) ? (float) $quote['oscillationPct'] : null,
+            'volume' => is_numeric($quote['volume'] ?? null) ? (int) $quote['volume'] : null,
+            'priceLabel' => $priceLabel,
+            'logo' => null,
+        ];
+    }
+
+    $pagination = $dadosLista['pagination'] ?? [];
+    $pageCurrent = (int) ($pagination['page'] ?? $page);
+    $totalPages = (int) ($pagination['totalPages'] ?? 1);
+    $total = isset($pagination['total']) ? (int) $pagination['total'] : count($stocks);
+
+    echo json_encode([
+        'success' => true,
+        'stocks' => $stocks,
+        'paginacao' => [
+            'paginaAtual' => max(1, $pageCurrent),
+            'totalPaginas' => max(1, $totalPages),
+            'totalAtivos' => $total,
+            'temProximaPagina' => $pageCurrent < $totalPages,
+        ],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+function getFutureQuote(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+    if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+        responderErroBrapi('CÃ³digo do contrato futuro ausente ou invÃ¡lido.', 400);
+        return;
+    }
+
+    $resposta = brapiRequest('v2/futures/quote', ['symbols' => $symbol]);
+    if (!$resposta['ok']) {
+        $status = (int) ($resposta['status'] ?? 502);
+        $mensagem = $status === 403
+            ? 'A cotaÃ§Ã£o deste contrato futuro exige o plano Pro da brapi.'
+            : 'NÃ£o foi possÃ­vel consultar a cotaÃ§Ã£o do contrato futuro.';
+        responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
+        return;
+    }
+
+    $body = json_decode((string) $resposta['body'], true);
+    $quotes = is_array($body) ? ($body['quotes'] ?? []) : [];
+    if (!is_array($quotes)) $quotes = [];
+
+    $results = [];
+    foreach ($quotes as $quote) {
+        if (!is_array($quote)) continue;
+        $requested = strtoupper(trim((string) ($quote['symbol'] ?? $symbol)));
+        $isRate = strtolower((string) ($quote['quotationType'] ?? '')) === 'rate';
+        $time = null;
+        if (is_numeric($quote['date'] ?? null)) {
+            $time = (new DateTimeImmutable('@' . (int) $quote['date']))
+                ->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM);
+        }
+        $data = [
+            'symbol' => $requested,
+            'shortName' => $requested,
+            'longName' => (string) ($quote['assetDescription'] ?? $requested),
+            'regularMarketVolume' => is_numeric($quote['volume'] ?? null) ? (int) $quote['volume'] : null,
+            'regularMarketPrice' => is_numeric($quote['settlement'] ?? null) ? (float) $quote['settlement'] : null,
+            'regularMarketChangePercent' => is_numeric($quote['oscillationPct'] ?? null) ? (float) $quote['oscillationPct'] : null,
+            'regularMarketTime' => $time,
+            'regularMarketOpen' => null,
+            'regularMarketDayHigh' => (!$isRate && is_numeric($quote['high'] ?? null)) ? (float) $quote['high'] : null,
+            'fiftyTwoWeekHigh' => null,
+            'fiftyTwoWeekLow' => null,
+            'currency' => (string) ($quote['tradingCurrency'] ?? 'BRL'),
+            'settlementRate' => is_numeric($quote['settlementRate'] ?? null) ? (float) $quote['settlementRate'] : null,
+            'quotationType' => $isRate ? 'rate' : 'price',
+        ];
+        $results[] = ['requestedSymbol' => $symbol, 'symbol' => $requested, 'data' => $data];
+    }
+
+    if (!$results) {
+        responderErroBrapi('A brapi nÃ£o retornou cotaÃ§Ã£o para este contrato futuro.', 404);
+        return;
+    }
+    echo json_encode(['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function historicoFuturos(): void
+{
+    header('Content-Type: application/json; charset=UTF-8');
+    $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
+    $range = trim((string) ($_GET['range'] ?? '3mo'));
+    $intervalos = [
+        '1d' => '-7 days', '7d' => '-7 days', '1mo' => '-1 month',
+        '3mo' => '-3 months', '6mo' => '-6 months', '1y' => '-1 year',
+    ];
+    if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+        responderErroBrapi('CÃ³digo do contrato futuro ausente ou invÃ¡lido.', 400);
+        return;
+    }
+    if (!isset($intervalos[$range])) {
+        responderErroBrapi('PerÃ­odo de histÃ³rico de futuros invÃ¡lido.', 400);
+        return;
+    }
+
+    $fuso = new DateTimeZone('America/Sao_Paulo');
+    $hoje = new DateTimeImmutable('today', $fuso);
+    $inicio = $hoje->modify($intervalos[$range]);
+    $resposta = brapiRequest('v2/futures/historical', [
+        'symbol' => $symbol,
+        'startDate' => $inicio->format('Y-m-d'),
+        'endDate' => $hoje->format('Y-m-d'),
+        'sortOrder' => 'asc',
+    ]);
+    if (!$resposta['ok']) {
+        $status = (int) ($resposta['status'] ?? 502);
+        $mensagem = $status === 403
+            ? 'O histÃ³rico de contratos futuros exige o plano Pro da brapi.'
+            : 'NÃ£o foi possÃ­vel consultar o histÃ³rico do contrato futuro.';
+        responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
+        return;
+    }
+
+    $body = json_decode((string) $resposta['body'], true);
+    $future = is_array($body) ? ($body['future'] ?? null) : null;
+    if (!is_array($future)) {
+        responderErroBrapi('A brapi retornou um histÃ³rico invÃ¡lido para este contrato.');
+        return;
+    }
+    $isRate = strtolower((string) ($future['quotationType'] ?? '')) === 'rate';
+    $history = $future['history'] ?? [];
+    if (!is_array($history)) $history = [];
+    usort($history, static fn($a, $b) => (int) ($a['date'] ?? 0) <=> (int) ($b['date'] ?? 0));
+    if ($range === '1d') $history = array_slice($history, -2);
+
+    $points = [];
+    foreach ($history as $point) {
+        if (!is_array($point) || !is_numeric($point['date'] ?? null)) continue;
+        $settlement = $point['settlement'] ?? null;
+        $close = is_numeric($settlement) ? (float) $settlement
+            : (is_numeric($point['close'] ?? null) ? (float) $point['close'] : null);
+        if ($close === null || $close <= 0) continue;
+        $points[] = [
+            'date' => (int) $point['date'],
+            'open' => null,
+            // Em DI/DAP, high e low sao taxas percentuais, enquanto settlement e BRL.
+            'high' => (!$isRate && is_numeric($point['high'] ?? null)) ? (float) $point['high'] : null,
+            'low' => (!$isRate && is_numeric($point['low'] ?? null)) ? (float) $point['low'] : null,
+            'close' => $close,
+            'adjustedClose' => null,
+            'volume' => is_numeric($point['volume'] ?? null) ? (int) $point['volume'] : null,
+        ];
+    }
+
+    $results = [[
+        'requestedSymbol' => $symbol,
+        'symbol' => (string) ($future['symbol'] ?? $symbol),
+        'data' => ['usedRange' => $range, 'usedInterval' => '1d', 'historicalDataPrice' => $points],
+    ]];
+    echo json_encode(['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null,
+        'took' => $body['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
 function patrimonioCarteirasAcaoController(): void {
 
     global $conexao;
