@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
+require_once __DIR__ . '/OAUTH.php'; // define loginGoogle() e loginLinkedin()
 
 $acao = $partes[1] ?? null;
 
@@ -21,9 +22,14 @@ switch ($acao) {
     case 'login':
         login();
         break;
-        
+
     case 'loginSite':
         loginSite();
+        break;
+
+
+    case 'loginGoogle':
+        loginGoogle();
         break;
 
     case 'registrarNovoUsuario':
@@ -40,6 +46,30 @@ switch ($acao) {
 
     case 'resend-verification':
         resendVerification();
+        break;
+
+    case 'perfilObter':
+        perfilObter();
+        break;
+
+    case 'perfilFoto':
+        perfilFoto();
+        break;
+
+    case 'perfilSolicitarTrocaSenha':
+        perfilSolicitarTrocaSenha();
+        break;
+
+    case 'perfilConfirmarTrocaSenha':
+        perfilConfirmarTrocaSenha();
+        break;
+
+    case 'perfilSolicitarTrocaEmail':
+        perfilSolicitarTrocaEmail();
+        break;
+
+    case 'perfilConfirmarTrocaEmail':
+        perfilConfirmarTrocaEmail();
         break;
 
     default:
