@@ -181,3 +181,24 @@ function deletarCarteira(PDO $conexao, $id_usuario, $id_carteira) {
         throw $e;
     }
 }
+
+function adicionarSaldoRepository(PDO $conexao, int $id_usuario, string $valor): ?string
+{
+    $sql = "
+        UPDATE usuario
+        SET saldo = saldo + CAST(:valor AS NUMERIC)
+        WHERE id_usuario = :id_usuario
+        RETURNING saldo
+    ";
+
+    $stmt = $conexao->prepare($sql);
+
+    $stmt->bindValue(':valor', $valor);
+    $stmt->bindValue(':id_usuario', $id_usuario, PDO::PARAM_INT);
+
+    $stmt->execute();
+
+    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $resultado ? $resultado['saldo'] : null;
+}
