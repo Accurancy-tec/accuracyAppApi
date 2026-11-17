@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
 require_once __DIR__ . '/OAUTH.php'; // define loginGoogle() e loginLinkedin()
+require_once __DIR__ . '/../src/Controllers/AdminController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -70,6 +71,46 @@ switch ($acao) {
 
     case 'perfilConfirmarTrocaEmail':
         perfilConfirmarTrocaEmail();
+        break;
+
+    case 'loginUnico':
+        loginUnico();
+        break;
+
+    case 'adminListarUsuarios':
+        adminListarUsuarios();
+        break;
+
+    case 'adminAlterarUsuario':
+        adminAlterarUsuario();
+        break;
+
+    case 'adminDeletarUsuario':
+        adminDeletarUsuario();
+        break;
+
+    case 'adminCategoriasNoticia':
+        adminCategoriasNoticia();
+        break;
+
+    case 'adminListarNoticias':
+        adminListarNoticias();
+        break;
+
+    case 'adminCriarNoticia':
+        adminCriarNoticia();
+        break;
+
+    case 'adminExcluirNoticia':
+        adminExcluirNoticia();
+        break;
+
+    case 'adminListarAdmins':
+        adminListarAdmins();
+        break;
+
+    case 'adminCriarAdmin':
+        adminCriarAdmin();
         break;
 
     default:
