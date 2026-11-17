@@ -1,8 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
-require_once __DIR__ . '/../src/Controllers/AuthController.php';
-require_once __DIR__ . '/../src/Controllers/GoogleAuthController.php';
+require_once __DIR__ . '/OAUTH.php'; // define loginGoogle() e loginLinkedin()
 
 $acao = $partes[1] ?? null;
 
@@ -28,9 +27,6 @@ switch ($acao) {
         loginSite();
         break;
 
-    case 'loginLinkedin':
-        loginLinkedin();
-        break;
 
     case 'loginGoogle':
         loginGoogle();

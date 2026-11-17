@@ -25,7 +25,7 @@ class OAuthRepository
      *   ['email_verificado' => true]
      * Deixe vazio [] se não houver nenhuma.
      */
-    private const USUARIO_CAMPOS_EXTRA = [];
+    private const USUARIO_CAMPOS_EXTRA = ['email_verificado_usuario' => true];
 
     public function __construct(private PDO $pdo) {}
 
