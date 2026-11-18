@@ -29,6 +29,15 @@ switch ($acao) {
     case 'historico-fiis':
         historicoFiis();
         break;
+    case 'listar-futuros':
+        listarContratosFuturos();
+        break;
+    case 'get-futures-quote':
+        getFutureQuote();
+        break;
+    case 'historico-futuros':
+        historicoFuturos();
+        break;
     case 'patrimonio-carteiras':
         patrimonioCarteirasAcaoController();
         break;
