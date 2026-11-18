@@ -28,19 +28,19 @@ function autenticar()
 
     try {
 
-        $decoded = JWT::decode(
+        $decoded = JWT::decode(D
             $matches[1],
             new Key($_ENV["SECRET_KEY"], "HS256")
         );
 
         return $decoded->sub;
-
     } catch (Exception $ex) {
 
         http_response_code(401);
 
         echo json_encode([
-            "erro" => "Token inválido ou expirado","detalhe" => $ex->getMessage()
+            "erro" => "Token inválido ou expirado",
+            "detalhe" => $ex->getMessage()
         ]);
 
         exit;
@@ -78,11 +78,9 @@ function validarToken($token)
         }
 
         return $decoded;
-
     } catch (Exception $erro) {
 
         return false;
-
     }
 }
 
