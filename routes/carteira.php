@@ -23,11 +23,16 @@ switch ($acao) {
         break;
 
     case 'excluir-carteira':
+        excluirCarteira();
         break;
-    
+
     case 'posicao-ativo':
         buscarPosicaoAtivoUsuario();
-    break;
+        break;
+
+    case 'adicionar-saldo':
+        adicionarSaldoController();
+        break;
 
     default:
         http_response_code(404);
