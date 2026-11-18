@@ -44,22 +44,20 @@ function buscarCarteiras()
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
 
-        if(empty($resultado)){
-           echo json_encode([
-            'success' => false,
-            'message' => "Nenhuma carteira encontrada",
-            'resultado' => []
-           ]);
+        if (empty($resultado)) {
+            echo json_encode([
+                'success' => false,
+                'message' => "Nenhuma carteira encontrada",
+                'resultado' => []
+            ]);
         }
 
-        foreach($resultado as &$resultados){
+        foreach ($resultado as &$resultados) {
 
             $id_carteira = $resultados['id_carteira'];
 
             // Puxando do brapiService
             $patrimonio = patrimonioCarteirasAcaoService($conexao, $id_usuario, $id_carteira);
-
-            //$resultados['meta_carteira'] = $patrimonio['meta_carteira'] ?? 0;
 
             $resultados['total_investido'] = $patrimonio['resumo']['total_investido'] ?? 0;
 
@@ -68,7 +66,6 @@ function buscarCarteiras()
             $resultados['lucro_prejuizo'] = $patrimonio['resumo']['lucro_prejuizo'] ?? 0;
 
             $resultados['rentabilidade_percentual'] = $patrimonio['resumo']['rentabilidade_percentual'] ?? 0;
-
         }
 
         unset($resultados);
@@ -77,7 +74,6 @@ function buscarCarteiras()
             "success" => true,
             "carteiras" => $resultado
         ]);
-
     } catch (PDOException $e) {
         echo json_encode([
             "success" => false,
@@ -303,5 +299,102 @@ function buscarPosicaoAtivoUsuario(): void
             'sucesso' => false,
             'mensagem' => 'Não foi possível consultar a posição do ativo.'
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}
+
+function excluirCarteira(): void
+{
+    global $conexao;
+
+    $id_usuario = autenticar();
+    $id_carteira = $_GET['id_carteira'] ?? null;
+
+    if (!$id_carteira) {
+        echo json_encode([
+            'success' => false,
+            'message' => "ID da carteira não fornecido"
+        ]);
+        exit;
+    }
+
+    try {
+
+        $resultado = deletarCarteiraService($conexao, $id_usuario, $id_carteira);
+
+        if (!$resultado) {
+            http_response_code(404);
+
+            echo json_encode([
+                'success' => false,
+                'message' => "Erro ao excluir a carteira"
+            ]);
+
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Carteira exluida com sucesso"
+        ]);
+    } catch (Throwable $error) {
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'message' => "Não foi possível conectar com o banco " . $error->getMessage()
+        ]);
+    }
+}
+
+function adicionarSaldoController()
+{
+    global $conexao;
+
+    try {
+
+        $id_usuario = autenticar();
+
+        $valor = $_GET['valor'] ?? null;
+
+        //validacao do valor
+        if (!is_string($valor) || !preg_match('/^\d{1,13}(\.\d{1,2})?$/', $valor) || (float) $valor <= 0) {
+            http_response_code(400);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Valor de depósito inválido.'
+            ]);
+            return;
+        }
+
+        //atualizar o saldo do usuario
+        $novoSaldo = adicionarSaldoService($conexao, $id_usuario, $valor);
+
+        if ($novoSaldo === null) {
+            http_response_code(404);
+
+            echo json_encode([
+                'success' => false,
+                'message' => 'Usuário não encontrado'
+            ]);
+            return;
+        }
+
+        http_response_code(200);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Saldo adicionado com sucesso',
+            'saldo_atual' => $novoSaldo
+        ]);
+    } catch (Throwable $e) {
+        error_log('Error ao adicionar o saldo:' . $e->getMessage());
+
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'message' => "Erro ao adicionar saldo"
+        ]);
     }
 }

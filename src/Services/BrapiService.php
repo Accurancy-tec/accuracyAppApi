@@ -108,9 +108,9 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
             $cotacoes = [];
         }
 
-        //error_log("TICKERS ENVIADOS: " . json_encode($tickers));
+        /*error_log("TICKERS ENVIADOS: " . json_encode($tickers));
 
-        /*error_log("RESPOSTA BRAPI: " . json_encode(
+        error_log("RESPOSTA BRAPI: " . json_encode(
             $dadosBrapi,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
         ));*/
@@ -119,58 +119,82 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
         $cotacoesPorTicker = [];
 
         foreach ($cotacoes as $cotacao) {
+
             if (!is_array($cotacao)) {
                 continue;
             }
 
-            $tickerCotacao = strtoupper(
-                trim((string) ($cotacao['symbol'] ?? ''))
-            );
+            $dadosCotacao = $cotacao['data'] ?? [];
+
+            if (!is_array($dadosCotacao)) {
+                $dadosCotacao = [];
+            }
+
+            $tickerCotacao = strtoupper(trim((string) (
+                $cotacao['symbol']
+                ?? $dadosCotacao['symbol']
+                ?? ''
+            )));
 
             if ($tickerCotacao !== '') {
                 $cotacoesPorTicker[$tickerCotacao] = $cotacao;
             }
         }
 
-
         // 6. Calcular o patrimônio de cada ação.
         $acoes = [];
 
         $totalInvestido = 0.0;
+        $totalInvestidoComCotacao = 0.0;
         $patrimonioAtual = 0.0;
 
         foreach ($posicoesPorTicker as $ticker => $listaPosicoes) {
+
             $cotacao = $cotacoesPorTicker[$ticker] ?? null;
-
-            $precoAtual = null;
-
-            if (is_array($cotacao) && isset($cotacao['data']['regularMarketPrice']) && is_numeric($cotacao['data']['regularMarketPrice'])) {
-                $precoAtual = (float) $cotacao['data']['regularMarketPrice'];
-            }
 
             $quantidadeTotal = 0.0;
             $valorInvestidoAcao = 0.0;
 
             foreach ($listaPosicoes as $posicao) {
-                $quantidade = $posicao['quantidade'];
-                $precoMedio = $posicao['preco_medio'];
 
-                $quantidadeTotal += $quantidade;
+                $quantidadeTotal += $posicao['quantidade'];
 
                 $valorInvestidoAcao +=
-                    $quantidade * $precoMedio;
+                    $posicao['quantidade'] * $posicao['preco_medio'];
             }
+            $totalInvestido += $valorInvestidoAcao;
 
-            // Calcular preço médio ponderado.
             $precoMedioPonderado = $quantidadeTotal > 0
                 ? $valorInvestidoAcao / $quantidadeTotal
                 : 0.0;
 
-            $nomeAtivo = $listaPosicoes[0]['nome_ativo']
-                ?? $ticker;
+            $nomeAtivo = $listaPosicoes[0]['nome_ativo'] ?? $ticker;
 
-            // Se não houver cotação, não inventar um preço atual.
-            if ($precoAtual === null) {
+            // O total investido independe da disponibilidade da cotação.
+            $totalInvestido += $valorInvestidoAcao;
+
+            // A brapi pode retornar o preço diretamente ou dentro de data.
+            $dadosCotacao = is_array($cotacao['data'] ?? null)
+                ? $cotacao['data']
+                : [];
+
+            $precoRaw = $cotacao['regularMarketPrice']
+                ?? $dadosCotacao['regularMarketPrice']
+                ?? null;
+
+            $precoAtual = is_numeric($precoRaw)
+                ? (float) $precoRaw
+                : null;
+
+            error_log("TICKER PROCESSADO: " . $ticker);
+            error_log("COTAÇÃO ENCONTRADA: " . json_encode($cotacao));
+            error_log("PREÇO ATUAL: " . var_export($precoAtual, true));
+            error_log("POSIÇÕES: " . json_encode($listaPosicoes));
+
+            if ($precoAtual === null || $precoAtual <= 0) {
+
+                error_log("Cotação indisponível para: " . $ticker);
+
                 $acoes[] = [
                     'ticker' => $ticker,
                     'nome_ativo' => $nomeAtivo,
@@ -184,7 +208,6 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
                     'cotacao_disponivel' => false
                 ];
 
-                // Não incluir essa ação nos cálculos do patrimônio atual.
                 continue;
             }
 
@@ -194,7 +217,7 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
 
             $rentabilidade = $valorInvestidoAcao > 0
                 ? ($lucroPrejuizo / $valorInvestidoAcao) * 100
-                : 0.0; 
+                : 0.0;
 
             $acoes[] = [
                 'ticker' => $ticker,
@@ -209,19 +232,20 @@ function patrimonioCarteirasAcaoService(PDO $conexao, $idUsuario, $idCarteira): 
                 'cotacao_disponivel' => true
             ];
 
-            // Somar somente ações com cotação disponível.
-            $totalInvestido += $valorInvestidoAcao;
             $patrimonioAtual += $valorAtualAcao;
         }
 
-        // 7. Calcular o resumo do patrimônio.
-        $lucroTotal = $patrimonioAtual - $totalInvestido;
+        // 7. Calcular o resumo.
+        $lucroTotal = $patrimonioAtual - $totalInvestidoComCotacao;
 
-        $rentabilidadeTotal = $totalInvestido > 0
-            ? ($lucroTotal / $totalInvestido) * 100
+        $rentabilidadeTotal = $totalInvestidoComCotacao > 0
+            ? ($lucroTotal / $totalInvestidoComCotacao) * 100
             : 0.0;
 
-        // 8. Retornar os dados para o Controller.
+        error_log("TOTAL INVESTIDO: " . $totalInvestido);
+        error_log("PATRIMÔNIO ATUAL: " . $patrimonioAtual);
+        error_log("RENTABILIDADE: " . $rentabilidadeTotal);
+        // 8. Retornar os dados.
         return [
             'success' => true,
             'message' => 'Patrimônio consultado com sucesso.',
