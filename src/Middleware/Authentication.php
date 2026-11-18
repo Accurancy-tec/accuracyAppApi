@@ -15,17 +15,15 @@ function autenticar()
 
     $authHeader = $headers["Authorization"] ?? '';
 
-    if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
+  if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
+    http_response_code(401);
 
-        http_response_code(401);
+    echo json_encode([
+        "erro" => "Token não enviado"
+    ]);
 
-        echo json_encode([
-            "erro" => "Token não enviado"
-        ]);
-
-        exit;
-    }
-
+    exit;
+}
     try {
 
         $decoded = JWT::decode(
@@ -34,13 +32,13 @@ function autenticar()
         );
 
         return $decoded->sub;
-
     } catch (Exception $ex) {
 
         http_response_code(401);
 
         echo json_encode([
-            "erro" => "Token inválido ou expirado","detalhe" => $ex->getMessage()
+            "erro" => "Token inválido ou expirado",
+            "detalhe" => $ex->getMessage()
         ]);
 
         exit;
@@ -78,11 +76,9 @@ function validarToken($token)
         }
 
         return $decoded;
-
     } catch (Exception $erro) {
 
         return false;
-
     }
 }
 

@@ -71,6 +71,14 @@ switch ($acao) {
     case 'perfilConfirmarTrocaEmail':
         perfilConfirmarTrocaEmail();
         break;
+        
+    case 'perfilAutorizarTrocaEmail':
+        perfilAutorizarTrocaEmail();
+        break;
+
+    case 'perfilAutorizarTrocaEmail':
+        perfilAutorizarTrocaEmail();
+        break;
 
     default:
 
