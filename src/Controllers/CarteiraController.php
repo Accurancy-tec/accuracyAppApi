@@ -354,9 +354,7 @@ function adicionarSaldoController()
 
         $id_usuario = autenticar();
 
-        $dados = json_decode(file_get_contents('php://input'), true);
-
-        $valor = $dados['valor'] ?? null;
+        $valor = $_GET['valor'] ?? null;
 
         //validacao do valor
         if (!is_string($valor) || !preg_match('/^\d{1,13}(\.\d{1,2})?$/', $valor) || (float) $valor <= 0) {
