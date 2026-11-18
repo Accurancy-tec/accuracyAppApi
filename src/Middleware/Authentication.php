@@ -15,20 +15,18 @@ function autenticar()
 
     $authHeader = $headers["Authorization"] ?? '';
 
-    if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
+  if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
+    http_response_code(401);
 
-        http_response_code(401);
+    echo json_encode([
+        "erro" => "Token não enviado"
+    ]);
 
-        echo json_encode([
-            "erro" => "Token não enviado"
-        ]);
-
-        exit;
-    }
-
+    exit;
+}
     try {
 
-        $decoded = JWT::decode(D
+        $decoded = JWT::decode(
             $matches[1],
             new Key($_ENV["SECRET_KEY"], "HS256")
         );
