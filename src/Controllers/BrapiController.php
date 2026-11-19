@@ -401,14 +401,14 @@ function listarAtivosInternacionais(): void
 
     if ($page === false || $page === null || $limit === false || $limit === null
         || $page < 1 || $limit < 1 || $limit > 20) {
-        responderErroBrapi('PÃ¡gina invÃ¡lida ou limite fora do intervalo (1 a 20).', 400);
+        responderErroBrapi('Página inválida ou limite fora do intervalo (1 a 20).', 400);
         return;
     }
 
     $ordenacoesPermitidas = ['name', 'close', 'change', 'change_abs', 'volume', 'market_cap_basic'];
     if (!in_array($sortBy, $ordenacoesPermitidas, true)
         || !in_array($sortOrder, ['asc', 'desc'], true)) {
-        responderErroBrapi('CritÃ©rio de ordenaÃ§Ã£o invÃ¡lido.', 400);
+        responderErroBrapi('Critério de ordenação inválido.', 400);
         return;
     }
     if (strlen($search) > 100) {
@@ -440,14 +440,14 @@ function listarAtivosInternacionais(): void
         $resposta = brapiRequest('quote/list', $query);
         if (!$resposta['ok']) {
             $status = (int) ($resposta['status'] ?? 502);
-            responderErroBrapi('NÃ£o foi possÃ­vel consultar BDRs e ETFs na brapi.',
+            responderErroBrapi('Não foi possível consultar BDRs e ETFs na brapi.',
                 $status >= 400 && $status < 600 ? $status : 502);
             return;
         }
 
         $dados = json_decode((string) $resposta['body'], true);
         if (!is_array($dados) || !isset($dados['stocks']) || !is_array($dados['stocks'])) {
-            responderErroBrapi('Resposta invÃ¡lida da brapi ao listar ativos internacionais.');
+            responderErroBrapi('Resposta inválida da brapi ao listar ativos internacionais.');
             return;
         }
 
@@ -1262,7 +1262,7 @@ function getFutureQuote(): void
     header('Content-Type: application/json; charset=UTF-8');
     $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
     if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
-        responderErroBrapi('CÃ³digo do contrato futuro ausente ou invÃ¡lido.', 400);
+        responderErroBrapi('Código do contrato futuro ausente ou inválido.', 400);
         return;
     }
 
@@ -1270,8 +1270,8 @@ function getFutureQuote(): void
     if (!$resposta['ok']) {
         $status = (int) ($resposta['status'] ?? 502);
         $mensagem = $status === 403
-            ? 'A cotaÃ§Ã£o deste contrato futuro exige o plano Pro da brapi.'
-            : 'NÃ£o foi possÃ­vel consultar a cotaÃ§Ã£o do contrato futuro.';
+            ? 'A cotação deste contrato futuro exige o plano Pro da brapi.'
+            : 'Não foi possível consultar a cotação do contrato futuro.';
         responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
         return;
     }
@@ -1285,8 +1285,23 @@ function getFutureQuote(): void
         if (!is_array($quote)) continue;
         $requested = strtoupper(trim((string) ($quote['symbol'] ?? $symbol)));
         $isRate = strtolower((string) ($quote['quotationType'] ?? '')) === 'rate';
+
+        // Skip placeholder contracts: brapi may return every field as null with date = 0.
+        $hasQuoteValue = is_numeric($quote['settlement'] ?? null)
+            || is_numeric($quote['settlementRate'] ?? null)
+            || is_numeric($quote['close'] ?? null);
+        if (!$hasQuoteValue) continue;
+
+        // Same rule as the list endpoint: settlement first, last trade only for price contracts.
+        $price = null;
+        if (is_numeric($quote['settlement'] ?? null)) {
+            $price = (float) $quote['settlement'];
+        } elseif (!$isRate && is_numeric($quote['close'] ?? null)) {
+            $price = (float) $quote['close'];
+        }
+
         $time = null;
-        if (is_numeric($quote['date'] ?? null)) {
+        if (is_numeric($quote['date'] ?? null) && (int) $quote['date'] > 0) {
             $time = (new DateTimeImmutable('@' . (int) $quote['date']))
                 ->setTimezone(new DateTimeZone('UTC'))->format(DATE_ATOM);
         }
@@ -1295,11 +1310,11 @@ function getFutureQuote(): void
             'shortName' => $requested,
             'longName' => (string) ($quote['assetDescription'] ?? $requested),
             'regularMarketVolume' => is_numeric($quote['volume'] ?? null) ? (int) $quote['volume'] : null,
-            'regularMarketPrice' => is_numeric($quote['settlement'] ?? null) ? (float) $quote['settlement'] : null,
+            'regularMarketPrice' => $price,
             'regularMarketChangePercent' => is_numeric($quote['oscillationPct'] ?? null) ? (float) $quote['oscillationPct'] : null,
             'regularMarketTime' => $time,
             'regularMarketOpen' => null,
-            'regularMarketDayHigh' => (!$isRate && is_numeric($quote['high'] ?? null)) ? (float) $quote['high'] : null,
+            'regularMarketDayHigh' => (!$isRate &&is_numeric($quote['high'] ?? null)) ? (float) $quote['high'] : null,
             'fiftyTwoWeekHigh' => null,
             'fiftyTwoWeekLow' => null,
             'currency' => (string) ($quote['tradingCurrency'] ?? 'BRL'),
@@ -1310,7 +1325,7 @@ function getFutureQuote(): void
     }
 
     if (!$results) {
-        responderErroBrapi('A brapi nÃ£o retornou cotaÃ§Ã£o para este contrato futuro.', 404);
+        responderErroBrapi('A brapi não retornou cotação para este contrato futuro.', 404);
         return;
     }
     echo json_encode(['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null],
@@ -1327,11 +1342,11 @@ function historicoFuturos(): void
         '3mo' => '-3 months', '6mo' => '-6 months', '1y' => '-1 year',
     ];
     if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
-        responderErroBrapi('CÃ³digo do contrato futuro ausente ou invÃ¡lido.', 400);
+        responderErroBrapi('Código do contrato futuro ausente ou inválido.', 400);
         return;
     }
     if (!isset($intervalos[$range])) {
-        responderErroBrapi('PerÃ­odo de histÃ³rico de futuros invÃ¡lido.', 400);
+        responderErroBrapi('Período de histórico de futuros inválido.', 400);
         return;
     }
 
@@ -1347,8 +1362,8 @@ function historicoFuturos(): void
     if (!$resposta['ok']) {
         $status = (int) ($resposta['status'] ?? 502);
         $mensagem = $status === 403
-            ? 'O histÃ³rico de contratos futuros exige o plano Pro da brapi.'
-            : 'NÃ£o foi possÃ­vel consultar o histÃ³rico do contrato futuro.';
+            ? 'O histórico de contratos futuros exige o plano Pro da brapi.'
+            : 'Não foi possível consultar o histórico do contrato futuro.';
         responderErroBrapi($mensagem, $status >= 400 && $status < 600 ? $status : 502);
         return;
     }
@@ -1356,7 +1371,7 @@ function historicoFuturos(): void
     $body = json_decode((string) $resposta['body'], true);
     $future = is_array($body) ? ($body['future'] ?? null) : null;
     if (!is_array($future)) {
-        responderErroBrapi('A brapi retornou um histÃ³rico invÃ¡lido para este contrato.');
+        responderErroBrapi('A brapi retornou um histórico inválido para este contrato.');
         return;
     }
     $isRate = strtolower((string) ($future['quotationType'] ?? '')) === 'rate';
