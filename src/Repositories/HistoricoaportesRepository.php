@@ -1,5 +1,7 @@
 <?php
  
+require_once __DIR__ . '/DetalheAporteRepository.php';
+
 // Lista TODOS os aportes do usuário (sem LIMIT), já com data, carteira e observação.
 
 function listarHistoricoAportesUsuario(PDO $conexao, $idUsuario)
@@ -26,6 +28,6 @@ function listarHistoricoAportesUsuario(PDO $conexao, $idUsuario)
  
     $sql->execute([$idUsuario]);
  
-    return $sql->fetchAll(PDO::FETCH_ASSOC);
+    return anexarDetalhesAportes($conexao, $sql->fetchAll(PDO::FETCH_ASSOC));
 }
  
