@@ -112,6 +112,45 @@ switch ($acao) {
     case 'adminCriarAdmin':
         adminCriarAdmin();
         break;
+    case 'adminOpcoesCurso':
+        adminOpcoesCurso();
+        break;
+
+    case 'adminListarCursos':
+        adminListarCursos();
+        break;
+
+    case 'adminCriarCurso':
+        adminCriarCurso();
+        break;
+
+    case 'adminAlterarCurso':
+        adminAlterarCurso();
+        break;
+
+    case 'adminExcluirCurso':
+        adminExcluirCurso();
+        break;
+
+    case 'adminListarPerguntas':
+        adminListarPerguntas();
+        break;
+
+    case 'adminResponderPergunta':
+        adminResponderPergunta();
+        break;
+
+    case 'adminExcluirPergunta':
+        adminExcluirPergunta();
+        break;
+
+    case 'perguntaEnviar':
+        perguntaEnviar();
+        break;
+
+    case 'perguntaListar':
+        perguntaListar();
+        break;
 
     default:
 
