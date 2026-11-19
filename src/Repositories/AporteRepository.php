@@ -4,6 +4,8 @@
 
 use PhpParser\Node\Stmt\Switch_;
 
+require_once __DIR__ . '/DetalheAporteRepository.php';
+
 function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte)
 {
 
@@ -16,7 +18,8 @@ function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quant
     recorrencia_aporte,
     observacao_aporte,
     data_aporte) 
-    VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)"
+    VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)
+    RETURNING id_aporte"
     );
 
     $sql->execute([
@@ -120,7 +123,7 @@ function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite =
 
     $sql->execute([":id_usuario" => $id_usuario, ":id_carteira" => $id_carteira]);
 
-    return $sql->fetchAll(PDO::FETCH_ASSOC);
+    return anexarDetalhesAportes($conexao, $sql->fetchAll(PDO::FETCH_ASSOC));
 
 
 }

@@ -7,6 +7,7 @@ require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/AtivoService.php";
 require_once __DIR__ . "/../Services/AporteService.php";
+require_once __DIR__ . "/../Repositories/DetalheAporteRepository.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/AutomacaoController.php";
@@ -66,6 +67,9 @@ function fazerAporte()
     $contributionRecurrence = $dados['recorrencia_aporte'] ?? null;
     $contributionNotes = $dados['observacao_aporte'] ?? null;
     $contributionDate = dataHojeCron();
+    $unitPriceInformed = $dados['preco_unitario'] ?? null;
+    $isFixedIncome = $categoriaAtivo === CATEGORIA_RENDA_FIXA || isset($dados['id_titulo']);
+    $fixedIncomeTitle = null;
 
     $idUsuario = autenticar();
 
@@ -93,17 +97,41 @@ function fazerAporte()
                 : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");*/
         }
 
+        // Renda fixa: simbolo, nome, valor e condicoes vem do cadastro do titulo (nunca do app).
+        if ($isFixedIncome) {
+            $fixedIncome = prepararAporteRendaFixa($conexao, $dados, $contributionDate);
+            $simboloAtivo = $fixedIncome["simbolo"];
+            $nomeAtivo = $fixedIncome["nome"];
+            $categoriaAtivo = $fixedIncome["categoria"];
+            $typeContribution = "Compra";
+            $contributionRecurrence = "Único";
+            $contributionQuantity = $fixedIncome["quantidade"];
+            $contributionAmount = $fixedIncome["valor"];
+            $fixedIncomeTitle = $fixedIncome["titulo"];
+        }
+
         $conexao->beginTransaction();
 
         error_log("ID CARTEIRA RECEBIDO NO APORTE: " . ($dados["id_carteira"] ?? "NULL"));
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
 
-        criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
+        $aporteCriado = criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
+        $idAporteCriado = (int) ($aporteCriado[0]["id_aporte"] ?? 0);
 
         $posicaoAtualizada = atualizarPosicao($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount);
 
         if (!$posicaoAtualizada) {
             throw new Exception("Quantidade Insuficiente para venda. A operação não pode ser concluída.");
+        }
+
+        // Detalhes por tipo de investimento (tabelas fixed_income_/variable_income_contribution_details).
+        if ($fixedIncomeTitle !== null) {
+            if ($idAporteCriado <= 0) {
+                throw new RuntimeException("Id do aporte não retornado; detalhe de renda fixa não gravado.");
+            }
+            registrarDetalheRendaFixa($conexao, $idAporteCriado, $fixedIncomeTitle);
+        } elseif ($idAporteCriado > 0) {
+            registrarDetalheRendaVariavel($conexao, $idAporteCriado, (string) $typeContribution, $contributionQuantity, $contributionAmount, $unitPriceInformed);
         }
 
         if ($contributionRecurrence !== "Único" && $typeContribution === "Compra") {
@@ -125,6 +153,17 @@ function fazerAporte()
             "sucesso" => true,
             "mensagem" => "Aporte cadastrado com sucesso"
         ]);
+    } catch (AporteValidacaoException $erro) {
+        // Validacao de negocio (mensagem ja segura para o usuario). HTTP 200 + sucesso=false,
+        // como no "Saldo insuficiente", para o app exibir o texto em vez de "Erro HTTP".
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+
+        echo json_encode([
+            "sucesso" => false,
+            "mensagem" => $erro->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $erro) {
         if ($conexao->inTransaction()) {
             $conexao->rollBack();
@@ -152,7 +191,7 @@ function fazerAporte()
 
         echo json_encode([
             "sucesso" => false,
-            "mensagem" => "NÃ£o foi possÃ­vel concluir a operaÃ§Ã£o. Tente novamente."
+            "mensagem" => "Não foi possível concluir a operação. Tente novamente."
         ], JSON_UNESCAPED_UNICODE);
     }
 }
