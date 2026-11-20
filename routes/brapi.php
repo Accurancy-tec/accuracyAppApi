@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/BrapiController.php';
+require_once __DIR__ . '/../src/Controllers/CriptoController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -40,6 +41,15 @@ switch ($acao) {
         break;
     case 'patrimonio-carteiras':
         patrimonioCarteirasAcaoController();
+        break;
+    case 'listar-criptomoedas':
+        listarCriptomoedas();
+        break;
+    case 'get-crypto-quote':
+        getCryptoQuote();
+        break;
+    case 'historico-criptomoedas':
+        historicoCriptomoedas();
         break;
     default:
         http_response_code(404);
