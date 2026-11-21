@@ -1,12 +1,9 @@
 <?php
-// CONTROLLER = recebe o pedido do site e devolve a resposta em JSON.
-
 header("Content-Type: application/json; charset=UTF-8");
 
 require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../Services/CursoService.php";
 
-// GET /cursos/trilhas
 function listarTrilhasController()
 {
     global $conexao;
@@ -28,7 +25,6 @@ function listarTrilhasController()
     }
 }
 
-// GET /cursos/trilha?id_trilha=1
 function buscarTrilhaController()
 {
     global $conexao;
