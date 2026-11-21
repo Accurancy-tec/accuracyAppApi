@@ -32,6 +32,10 @@ switch (true) {
     case $partes[0] === 'automacao':
         require __DIR__ . '/../routes/automacao.php';
         break;
+    
+    case $partes[0] === 'cursos':
+        require __DIR__ . '/../routes/cursos.php';
+        break;
 
     default:
 
