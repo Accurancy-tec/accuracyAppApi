@@ -346,6 +346,29 @@ function excluirCarteira(): void
     }
 }
 
+function buscarSaldoController()
+{
+    global $conexao;
+
+    try {
+        $id_usuario = autenticar();
+        $saldo = buscarSaldoRepository($conexao, $id_usuario);
+
+        if ($saldo === null) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Usuário não encontrado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        http_response_code(200);
+        echo json_encode(['success' => true, 'saldo_atual' => $saldo], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        error_log('Erro ao buscar o saldo: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Erro ao consultar o saldo'], JSON_UNESCAPED_UNICODE);
+    }
+}
+
 function adicionarSaldoController()
 {
     global $conexao;
