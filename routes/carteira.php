@@ -34,6 +34,10 @@ switch ($acao) {
         adicionarSaldoController();
         break;
 
+    case 'saldo':
+        buscarSaldoController();
+        break;
+
     default:
         http_response_code(404);
 
