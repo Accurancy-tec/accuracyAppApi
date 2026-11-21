@@ -5,6 +5,74 @@ require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/BrapiService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 
+/** Seconds a successful brapi response is reused (protects the free plan rate limit). */
+const BRAPI_CACHE_TTL = 45;
+/** Seconds an old cached response may still be served when brapi answers HTTP 429. */
+const BRAPI_CACHE_STALE_MAX = 21600;
+
+/** Cache file for one request. The key uses only endpoint and query: never the token. */
+function brapiCacheFile(string $endpoint, array $query): string
+{
+    $dir = rtrim(sys_get_temp_dir(), "/\\") . DIRECTORY_SEPARATOR . "accurancy_brapi_cache";
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    ksort($query);
+    return $dir . DIRECTORY_SEPARATOR . sha1($endpoint . "?" . http_build_query($query)) . ".json";
+}
+
+/** Returns the cached body when it is younger than $maxAge seconds, otherwise null. */
+function brapiCacheLer(string $arquivo, int $maxAge): ?string
+{
+    if (!is_file($arquivo)) {
+        return null;
+    }
+    $idade = time() - (int) @filemtime($arquivo);
+    if ($idade > $maxAge) {
+        return null;
+    }
+    $conteudo = @file_get_contents($arquivo);
+    return is_string($conteudo) && $conteudo !== "" ? $conteudo : null;
+}
+
+function brapiCacheGravar(string $arquivo, string $body): void
+{
+    // Best effort: a read-only temp dir must never break the request.
+    @file_put_contents($arquivo, $body, LOCK_EX);
+}
+
+if (!function_exists("brapiHttpGet")) {
+    /** Single HTTP GET against brapi. Returns body (or false), status, cURL error and Retry-After seconds. */
+    function brapiHttpGet(string $url, string $token): array
+    {
+        $retryAfter = 0;
+        $curl = curl_init($url);
+        curl_setopt_array($curl, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                "Authorization: Bearer " . $token,
+                "Accept: application/json"
+            ],
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_HEADERFUNCTION => function ($ch, $linha) use (&$retryAfter) {
+                if (stripos($linha, "retry-after:") === 0) {
+                    $retryAfter = (int) trim(substr($linha, 12));
+                }
+                return strlen($linha);
+            }
+        ]);
+
+        $body = curl_exec($curl);
+        $curlError = curl_error($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        return ["body" => $body, "status" => $status, "curl_error" => $curlError, "retry_after" => $retryAfter];
+    }
+}
+
 function brapiRequest(string $endpoint, array $query = []): array
 {
     $baseUrl = getenv("BRAPI_BASE_URL");
@@ -22,38 +90,51 @@ function brapiRequest(string $endpoint, array $query = []): array
         $url .= "?" . http_build_query($query);
     }
 
-    $curl = curl_init($url);
-    curl_setopt_array($curl, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer " . $token,
-            "Accept: application/json"
-        ],
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_FOLLOWLOCATION => false
-    ]);
+    $arquivoCache = brapiCacheFile($endpoint, $query);
+    $recente = brapiCacheLer($arquivoCache, BRAPI_CACHE_TTL);
+    if ($recente !== null) {
+        return ["ok" => true, "status" => 200, "body" => $recente, "error" => null];
+    }
 
-    $body = curl_exec($curl);
-    $curlError = curl_error($curl);
-    $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+    $resposta = brapiHttpGet($url, $token);
+
+    // HTTP 429 (rate limit): wait a short time and try once more.
+    if ($resposta["body"] !== false && $resposta["status"] === 429) {
+        $espera = max(1, min(2, (int) $resposta["retry_after"]));
+        error_log("Brapi HTTP status: 429 endpoint=" . $endpoint . " (nova tentativa em " . $espera . "s)");
+        sleep($espera);
+        $resposta = brapiHttpGet($url, $token);
+    }
+
+    $body = $resposta["body"];
+    $status = $resposta["status"];
 
     if ($body === false) {
-        error_log("Brapi cURL error: " . $curlError);
+        error_log("Brapi cURL error: " . $resposta["curl_error"]);
         return ["ok" => false, "status" => 502, "body" => null, "error" => "Falha de conexão com a Brapi"];
     }
 
     if ($status < 200 || $status >= 300) {
         error_log("Brapi HTTP status: " . $status . " endpoint=" . $endpoint);
+        if ($status === 429) {
+            // Still limited: an older copy is better than an error screen.
+            $antigo = brapiCacheLer($arquivoCache, BRAPI_CACHE_STALE_MAX);
+            if ($antigo !== null) {
+                return ["ok" => true, "status" => 200, "body" => $antigo, "error" => null];
+            }
+        }
         return ["ok" => false, "status" => $status, "body" => $body, "error" => "A Brapi retornou HTTP " . $status];
     }
 
+    brapiCacheGravar($arquivoCache, (string) $body);
     return ["ok" => true, "status" => $status, "body" => $body, "error" => null];
 }
 
 function responderErroBrapi(string $mensagem, int $status = 502): void
 {
+    if ($status === 429) {
+        $mensagem = "Muitas consultas ao provedor de cotações. Aguarde alguns segundos e tente novamente.";
+    }
     http_response_code($status);
     echo json_encode([
         "success" => false,
