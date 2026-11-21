@@ -1,7 +1,4 @@
 <?php
-// REPOSITORY = só conversa com o banco (SQL). Nada de regra aqui.
-
-// Lista todas as trilhas (tópicos/playlists) na ordem certa
 function buscarTrilhas(PDO $conexao)
 {
     $sql = "
@@ -23,7 +20,6 @@ function buscarTrilhas(PDO $conexao)
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// Busca uma trilha só, pelo id
 function buscarTrilhaPorId(PDO $conexao, $idTrilha)
 {
     $sql = "
