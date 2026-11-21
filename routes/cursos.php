@@ -1,6 +1,4 @@
 <?php
-// ROTAS dos cursos: define qual função responde a cada endereço.
-
 require_once __DIR__ . '/../src/Controllers/CursoController.php';
 
 $acao = $partes[1] ?? null;
