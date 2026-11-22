@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../src/Controllers/BrapiController.php';
 require_once __DIR__ . '/../src/Controllers/CriptoController.php';
+require_once __DIR__ . '/../src/Controllers/CambioController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -50,6 +51,15 @@ switch ($acao) {
         break;
     case 'historico-criptomoedas':
         historicoCriptomoedas();
+        break;
+    case 'listar-moedas':
+        listarMoedas();
+        break;
+    case 'get-currency-quote':
+        getCurrencyQuote();
+        break;
+    case 'historico-moedas':
+        historicoMoedas();
         break;
     default:
         http_response_code(404);
