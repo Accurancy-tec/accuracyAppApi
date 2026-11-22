@@ -10,28 +10,77 @@ require_once __DIR__ . "/../Services/BrapiService.php";
 
 function criarCarteira()
 {
-    try {
-        global $conexao;
+    global $conexao;
 
+    try {
+        $idUser = autenticar();
         $dados = json_decode(file_get_contents("php://input"), true);
 
-        $idUser = autenticar();
-        $nameWallet = $dados['nome_carteira'];
-        $typeWallet = $dados['tipo_carteira'];
-        $walletStyle = $dados['estilo_carteira'];
-        $walletGoals = $dados['meta_carteira'];
+        if (!is_array($dados)) {
+            http_response_code(400);
+            echo json_encode([
+                "success" => false,
+                "message" => "Corpo da requisição inválido."
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
 
-        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $walletGoals, $walletStyle);
+        $nameWallet = trim((string) ($dados['nome_carteira'] ?? ''));
+        $typeWallet = trim((string) ($dados['tipo_carteira'] ?? 'Real'));
+        $walletStyle = trim((string) ($dados['estilo_carteira'] ?? ''));
+        $walletGoals = $dados['meta_carteira'] ?? null;
 
+        $estilosPermitidos = ['Cripto', 'Internacional', 'Renda Fixa', 'Renda Variavel'];
+
+        if ($nameWallet === '' || mb_strlen($nameWallet) > 30) {
+            http_response_code(400);
+            echo json_encode([
+                "success" => false,
+                "message" => "Informe um nome de carteira com até 30 caracteres."
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        if (!in_array($walletStyle, $estilosPermitidos, true)) {
+            http_response_code(400);
+            echo json_encode([
+                "success" => false,
+                "message" => "Selecione um estilo de carteira válido."
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        if ($walletGoals !== null && (!is_numeric($walletGoals) || (float) $walletGoals < 0)) {
+            http_response_code(400);
+            echo json_encode([
+                "success" => false,
+                "message" => "A meta da carteira deve ser um número igual ou maior que zero."
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $idCarteira = criarCarteiraService(
+            $conexao,
+            $idUser,
+            $nameWallet,
+            $walletStyle,
+            $walletGoals,
+            $typeWallet
+        );
+
+        http_response_code(201);
         echo json_encode([
             "success" => true,
-            "message" => "carteira cadastrado com sucesso"
-        ]);
-    } catch (PDOException $erro) {
+            "message" => "Carteira criada com sucesso.",
+            "id_carteira" => $idCarteira
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $erro) {
+        error_log("Erro ao criar carteira: " . $erro->getMessage());
+        http_response_code(500);
         echo json_encode([
             "success" => false,
-            "message" => "Erro ao salvar: " . $erro->getMessage()
-        ]);
+            "message" => "Não foi possível criar a carteira."
+        ], JSON_UNESCAPED_UNICODE);
     }
 }
 
@@ -46,10 +95,10 @@ function buscarCarteiras()
 
         if (empty($resultado)) {
             echo json_encode([
-                'success' => false,
-                'message' => "Nenhuma carteira encontrada",
-                'resultado' => []
-            ]);
+                "success" => true,
+                "carteiras" => []
+            ], JSON_UNESCAPED_UNICODE);
+            return;
         }
 
         foreach ($resultado as &$resultados) {
@@ -74,11 +123,13 @@ function buscarCarteiras()
             "success" => true,
             "carteiras" => $resultado
         ]);
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
+        error_log("Erro ao buscar carteiras: " . $e->getMessage());
+        http_response_code(500);
         echo json_encode([
             "success" => false,
-            "message" => "Não foi possível buscar as carteiras" . $e->getMessage()
-        ]);
+            "message" => "Não foi possível buscar as carteiras."
+        ], JSON_UNESCAPED_UNICODE);
     }
 }
 
