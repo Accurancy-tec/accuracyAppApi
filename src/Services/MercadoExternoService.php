@@ -1,9 +1,10 @@
 <?php
 
-// Free market data for cryptocurrencies and foreign currencies, quoted in BRL.
+// Free market data for foreign currencies, quoted in BRL.
 // Source: AwesomeAPI (https://economia.awesomeapi.com.br). It works without a key (the provider
 // then caches for about 1 minute); an optional key in AWESOMEAPI_TOKEN is sent in the x-api-key
-// header and never logged. brapi only serves crypto/currency on paid plans (HTTP 403 on the free one).
+// header and never logged. brapi serves currencies only on paid plans, so they come from here.
+// Cryptocurrencies keep using brapi (CriptoController).
 //
 // Responses reuse the same JSON shapes as the stock endpoints so the Android list/details
 // screens are shared.
@@ -14,17 +15,6 @@ const EXT_CACHE_TTL = 45;            // seconds a quote is reused (protects the 
 const EXT_CACHE_TTL_CATALOGO = 86400; // the list of available pairs changes rarely
 const EXT_CACHE_STALE_MAX = 21600;   // old copy accepted when the provider rate-limits us
 const EXT_MAX_DIAS_HISTORICO = 360;  // provider limit for the daily history
-
-/** Known crypto codes with display names, in the order shown by the "rank" sort. */
-const EXT_CRIPTO_NOMES = [
-    'BTC' => 'Bitcoin', 'ETH' => 'Ethereum', 'XRP' => 'XRP', 'SOL' => 'Solana', 'BNB' => 'BNB',
-    'DOGE' => 'Dogecoin', 'ADA' => 'Cardano', 'LTC' => 'Litecoin', 'DOT' => 'Polkadot',
-    'AVAX' => 'Avalanche', 'LINK' => 'Chainlink', 'MATIC' => 'Polygon', 'BCH' => 'Bitcoin Cash',
-    'XLM' => 'Stellar', 'TRX' => 'TRON', 'UNI' => 'Uniswap', 'ATOM' => 'Cosmos', 'SHIB' => 'Shiba Inu',
-    'ETC' => 'Ethereum Classic', 'DASH' => 'Dash',
-];
-/** Crypto pairs assumed available when the provider catalog cannot be read. */
-const EXT_CRIPTO_PADRAO = ['BTC', 'ETH', 'XRP', 'DOGE', 'LTC'];
 
 /** Foreign currencies (value in BRL), in the order shown by the "rank" sort. */
 const EXT_MOEDAS_NOMES = [
@@ -45,10 +35,10 @@ function extCodigoValido(string $codigo): bool
     return preg_match(EXT_PADRAO_CODIGO, $codigo) === 1;
 }
 
-/** Name table of a market type: "cripto" or "moeda". */
+/** Name table of a market type (only "moeda" is served by this provider). */
 function extNomes(string $tipo): array
 {
-    return $tipo === 'cripto' ? EXT_CRIPTO_NOMES : EXT_MOEDAS_NOMES;
+    return EXT_MOEDAS_NOMES;
 }
 
 /** Removes Portuguese accents so "dolar" finds "Dólar" (no dependency on iconv/intl). */
@@ -184,7 +174,7 @@ function extRequest(string $caminho, array $query = [], int $ttl = EXT_CACHE_TTL
 function extCatalogo(string $tipo): array
 {
     $nomes = extNomes($tipo);
-    $padrao = $tipo === 'cripto' ? EXT_CRIPTO_PADRAO : EXT_MOEDAS_PADRAO;
+    $padrao = EXT_MOEDAS_PADRAO;
 
     $disponiveis = [];
     $resposta = extRequest('json/available', [], EXT_CACHE_TTL_CATALOGO);
@@ -330,7 +320,7 @@ function extListar(string $tipo): void
     $busca = strtoupper(trim((string) ($_GET['search'] ?? '')));
     $ordenarPor = trim((string) ($_GET['sortBy'] ?? 'rank'));
     $ordem = strtolower(trim((string) ($_GET['sortOrder'] ?? 'desc')));
-    $rotulo = $tipo === 'cripto' ? 'criptomoedas' : 'moedas';
+    $rotulo = 'moedas';
 
     if ($pagina === false || $pagina === null || $limite === false || $limite === null
         || $pagina < 1 || $limite < 1 || $limite > 20) {
@@ -407,7 +397,7 @@ function extCotacaoAtivo(string $tipo): void
 {
     header('Content-Type: application/json; charset=UTF-8');
     $simbolo = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
-    $rotulo = $tipo === 'cripto' ? 'criptomoeda' : 'moeda';
+    $rotulo = 'moeda';
     if ($simbolo === '' || !extCodigoValido($simbolo)) {
         extResponderErro('Código da ' . $rotulo . ' ausente ou inválido.', 400);
         return;
@@ -445,7 +435,7 @@ function extHistorico(string $tipo): void
     header('Content-Type: application/json; charset=UTF-8');
     $simbolo = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
     $periodo = trim((string) ($_GET['range'] ?? '3mo'));
-    $rotulo = $tipo === 'cripto' ? 'criptomoeda' : 'moeda';
+    $rotulo = 'moeda';
     // Number of daily candles per range ("Hoje" shows the last two days: no intraday data).
     $dias = [
         '1d' => 5, '7d' => 7, '1mo' => 30, '3mo' => 90, '6mo' => 180,
