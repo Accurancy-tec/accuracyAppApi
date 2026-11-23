@@ -7,6 +7,7 @@ require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/AtivoService.php";
 require_once __DIR__ . "/../Services/AporteService.php";
+require_once __DIR__ . "/../Repositories/DetalheAporteRepository.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/AutomacaoController.php";
@@ -66,31 +67,41 @@ function fazerAporte()
     $contributionRecurrence = $dados['recorrencia_aporte'] ?? null;
     $contributionNotes = $dados['observacao_aporte'] ?? null;
     $contributionDate = dataHojeCron();
+    $unitPriceInformed = $dados['preco_unitario'] ?? null;
+    $isFixedIncome = $categoriaAtivo === CATEGORIA_RENDA_FIXA || isset($dados['id_titulo']);
+    $fixedIncomeTitle = null;
 
-    $idUsuario = autenticar();
-
-    /*if (!$idWallet || !carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
-        http_response_code(403);
-        echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida @."]);
+    // id_carteira é obrigatório: sem ele o aporte seria gravado sem carteira.
+    if (!$idWallet) {
+        http_response_code(400);
+        echo json_encode([
+            "sucesso" => false,
+            "mensagem" => "Informe a carteira do aporte."
+        ], JSON_UNESCAPED_UNICODE);
         exit;
-    }*/
+    }
 
     try {
-        if ($idWallet) {
-            if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
-                http_response_code(403);
-                echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida !."]);
-                exit;
-            }
-        } else {
-            // O app ainda não envia id_carteira: usa a carteira mais antiga do
-            // usuário (a lista vem do mais novo pro mais antigo) e, se ele não
-            // tiver nenhuma, cria a "Carteira principal".
-            $carteirasDoUsuario = getCarteirasDoUsuarioService($conexao, $idUsuario);
+        if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
+            http_response_code(403);
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "Carteira inválida."
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
 
-            /*$idWallet = $carteirasDoUsuario
-                ? end($carteirasDoUsuario)["id_carteira"]
-                : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");*/
+        // Renda fixa: simbolo, nome, valor e condicoes vem do cadastro do titulo (nunca do app).
+        if ($isFixedIncome) {
+            $fixedIncome = prepararAporteRendaFixa($conexao, $dados, $contributionDate);
+            $simboloAtivo = $fixedIncome["simbolo"];
+            $nomeAtivo = $fixedIncome["nome"];
+            $categoriaAtivo = $fixedIncome["categoria"];
+            $typeContribution = "Compra";
+            $contributionRecurrence = "Único";
+            $contributionQuantity = $fixedIncome["quantidade"];
+            $contributionAmount = $fixedIncome["valor"];
+            $fixedIncomeTitle = $fixedIncome["titulo"];
         }
 
         $conexao->beginTransaction();
@@ -98,12 +109,23 @@ function fazerAporte()
         error_log("ID CARTEIRA RECEBIDO NO APORTE: " . ($dados["id_carteira"] ?? "NULL"));
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
 
-        criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
+        $aporteCriado = criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
+        $idAporteCriado = (int) ($aporteCriado[0]["id_aporte"] ?? 0);
 
         $posicaoAtualizada = atualizarPosicao($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount);
 
         if (!$posicaoAtualizada) {
             throw new Exception("Quantidade Insuficiente para venda. A operação não pode ser concluída.");
+        }
+
+        // Detalhes por tipo de investimento (tabelas fixed_income_/variable_income_contribution_details).
+        if ($fixedIncomeTitle !== null) {
+            if ($idAporteCriado <= 0) {
+                throw new RuntimeException("Id do aporte não retornado; detalhe de renda fixa não gravado.");
+            }
+            registrarDetalheRendaFixa($conexao, $idAporteCriado, $fixedIncomeTitle);
+        } elseif ($idAporteCriado > 0) {
+            registrarDetalheRendaVariavel($conexao, $idAporteCriado, (string) $typeContribution, $contributionQuantity, $contributionAmount, $unitPriceInformed);
         }
 
         if ($contributionRecurrence !== "Único" && $typeContribution === "Compra") {
@@ -125,15 +147,46 @@ function fazerAporte()
             "sucesso" => true,
             "mensagem" => "Aporte cadastrado com sucesso"
         ]);
-    } catch (Throwable $erro) {
+    } catch (AporteValidacaoException $erro) {
+        // Validacao de negocio (mensagem ja segura para o usuario). HTTP 200 + sucesso=false,
+        // como no "Saldo insuficiente", para o app exibir o texto em vez de "Erro HTTP".
         if ($conexao->inTransaction()) {
             $conexao->rollBack();
         }
 
         echo json_encode([
             "sucesso" => false,
-            "mensagem" => "Erro ao salvar: " . $erro->getMessage()
-        ]);
+            "mensagem" => $erro->getMessage()
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $erro) {
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+
+        // Registra os detalhes tecnicos no log do servidor, sem expo-los ao aplicativo.
+        $detalhesErro = sprintf(
+            "AportesController::fazerAporte | classe=%s | codigo=%s | arquivo=%s:%d | mensagem=%s",
+            get_class($erro),
+            (string) $erro->getCode(),
+            $erro->getFile(),
+            $erro->getLine(),
+            $erro->getMessage()
+        );
+        error_log($detalhesErro . PHP_EOL . $erro->getTraceAsString());
+
+        // A excecao do PostgreSQL continua bloqueando a compra; apenas simplificamos o Toast.
+        if (stripos($erro->getMessage(), "saldo insuficiente") !== false) {
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "Saldo insuficiente"
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        echo json_encode([
+            "sucesso" => false,
+            "mensagem" => "Não foi possível concluir a operação. Tente novamente."
+        ], JSON_UNESCAPED_UNICODE);
     }
 }
 

@@ -11,21 +11,28 @@ $dotenv->safeLoad();
 
 function autenticar()
 {
-    $headers = getallheaders();
+    // O cors.php já recompõe HTTP_AUTHORIZATION; getallheaders() fica como
+    // reserva, sem diferenciar maiúsculas de minúsculas ("authorization").
+    $authHeader = $_SERVER["HTTP_AUTHORIZATION"] ?? '';
 
-    $authHeader = $headers["Authorization"] ?? '';
-
-    if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
-
-        http_response_code(401);
-
-        echo json_encode([
-            "erro" => "Token não enviado"
-        ]);
-
-        exit;
+    if ($authHeader === '' && function_exists('getallheaders')) {
+        foreach (getallheaders() as $nome => $valor) {
+            if (strtolower($nome) === 'authorization') {
+                $authHeader = $valor;
+                break;
+            }
+        }
     }
 
+  if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
+    http_response_code(401);
+
+    echo json_encode([
+        "erro" => "Token não enviado"
+    ]);
+
+    exit;
+}
     try {
 
         $decoded = JWT::decode(
@@ -34,13 +41,13 @@ function autenticar()
         );
 
         return $decoded->sub;
-
     } catch (Exception $ex) {
 
         http_response_code(401);
 
         echo json_encode([
-            "erro" => "Token inválido ou expirado","detalhe" => $ex->getMessage()
+            "erro" => "Token inválido ou expirado",
+            "detalhe" => $ex->getMessage()
         ]);
 
         exit;
@@ -78,11 +85,9 @@ function validarToken($token)
         }
 
         return $decoded;
-
     } catch (Exception $erro) {
 
         return false;
-
     }
 }
 

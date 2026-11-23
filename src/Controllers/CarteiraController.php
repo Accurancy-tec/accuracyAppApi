@@ -21,7 +21,11 @@ function criarCarteira()
         $walletStyle = $dados['estilo_carteira'];
         $walletGoals = $dados['meta_carteira'];
 
+<<<<<<< HEAD
         criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $walletGoals, $walletStyle);
+=======
+        criarCarteiraService($conexao, $idUser, $nameWallet, $walletStyle, $walletGoals, $typeWallet);
+>>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 
         echo json_encode([
             "success" => true,
@@ -44,12 +48,19 @@ function buscarCarteiras()
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
 
+<<<<<<< HEAD
         if (empty($resultado)) {
             echo json_encode([
                 'success' => false,
                 'message' => "Nenhuma carteira encontrada",
                 'resultado' => []
             ]);
+=======
+        // Sem carteiras: segue adiante e devolve success=true com a lista vazia
+        // (antes enviava dois JSONs seguidos, o que quebrava o site).
+        if (empty($resultado)) {
+            $resultado = [];
+>>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
         }
 
         foreach ($resultado as &$resultados) {
@@ -346,6 +357,32 @@ function excluirCarteira(): void
     }
 }
 
+<<<<<<< HEAD
+=======
+function buscarSaldoController()
+{
+    global $conexao;
+
+    try {
+        $id_usuario = autenticar();
+        $saldo = buscarSaldoRepository($conexao, $id_usuario);
+
+        if ($saldo === null) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'message' => 'Usuário não encontrado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        http_response_code(200);
+        echo json_encode(['success' => true, 'saldo_atual' => $saldo], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        error_log('Erro ao buscar o saldo: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Erro ao consultar o saldo'], JSON_UNESCAPED_UNICODE);
+    }
+}
+
+>>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 function adicionarSaldoController()
 {
     global $conexao;

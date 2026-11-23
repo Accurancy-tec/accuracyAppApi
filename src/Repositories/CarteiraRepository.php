@@ -182,6 +182,20 @@ function deletarCarteira(PDO $conexao, $id_usuario, $id_carteira) {
     }
 }
 
+<<<<<<< HEAD
+=======
+/** Read-only: current balance of the user (the same column the balance trigger maintains). */
+function buscarSaldoRepository(PDO $conexao, int $id_usuario): ?string
+{
+    $stmt = $conexao->prepare('SELECT saldo FROM usuario WHERE id_usuario = :id_usuario');
+    $stmt->bindValue(':id_usuario', $id_usuario, PDO::PARAM_INT);
+    $stmt->execute();
+    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $resultado ? (string) $resultado['saldo'] : null;
+}
+
+>>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 function adicionarSaldoRepository(PDO $conexao, int $id_usuario, string $valor): ?string
 {
     $sql = "

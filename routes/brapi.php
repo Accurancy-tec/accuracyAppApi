@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . '/../src/Controllers/BrapiController.php';
+require_once __DIR__ . '/../src/Controllers/CriptoController.php';
+require_once __DIR__ . '/../src/Controllers/CambioController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -17,6 +19,9 @@ switch ($acao) {
     case 'historico-acoes':
         historicoAcoes();
         break;
+    case 'listar-internacionais':
+        listarAtivosInternacionais();
+        break;
     case 'listar-fiis':
         listarFiis();
         break;
@@ -26,8 +31,35 @@ switch ($acao) {
     case 'historico-fiis':
         historicoFiis();
         break;
+    case 'listar-futuros':
+        listarContratosFuturos();
+        break;
+    case 'get-futures-quote':
+        getFutureQuote();
+        break;
+    case 'historico-futuros':
+        historicoFuturos();
+        break;
     case 'patrimonio-carteiras':
         patrimonioCarteirasAcaoController();
+        break;
+    case 'listar-criptomoedas':
+        listarCriptomoedas();
+        break;
+    case 'get-crypto-quote':
+        getCryptoQuote();
+        break;
+    case 'historico-criptomoedas':
+        historicoCriptomoedas();
+        break;
+    case 'listar-moedas':
+        listarMoedas();
+        break;
+    case 'get-currency-quote':
+        getCurrencyQuote();
+        break;
+    case 'historico-moedas':
+        historicoMoedas();
         break;
     default:
         http_response_code(404);

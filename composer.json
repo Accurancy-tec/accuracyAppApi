@@ -2,7 +2,12 @@
     "require": {
         "firebase/php-jwt": "^7.1",
         "vlucas/phpdotenv": "^5.7",
+<<<<<<< HEAD
         "phpmailer/phpmailer": "^7.1"
+=======
+        "phpmailer/phpmailer": "^7.1",
+        "google/apiclient": "^2.20"
+>>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
     },
     "require-dev": {
         "phpunit/phpunit": "^11.5"
