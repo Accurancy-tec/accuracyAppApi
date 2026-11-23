@@ -298,12 +298,36 @@ function loginSite()
         exit;
     }
 
-    $token = criarToken($usuario["id_usuario"]);
 
+    // Gera um access token com validade de 15 minutos.
+    $accessToken = criarToken($usuario["id_usuario"]);
+
+    // Gera um refresh token criptograficamente aleatório.
+    $refreshToken = criarRefreshToken();
+
+    // Armazena somente o hash do refresh token no banco.
+    $refreshTokenHash = criarHashRefreshToken($refreshToken);
+
+    // Sessão válida por 30 dias.
+    $expiraEm = date(
+        "Y-m-d H:i:s",
+        time() + (60 * 60 * 24 * 30)
+    );
+
+    // Usa o Service já existente na API.
+    criarSessaoUsuarioService(
+        $conexao,
+        $usuario,
+        $refreshTokenHash,
+        $expiraEm
+    );
+
+    // Retorna os dois tokens para o site.
     echo json_encode([
         "success" => true,
         "message" => "Login realizado com sucesso",
-        "token" => $token,
+        "token" => $accessToken,
+        "refreshToken" => $refreshToken,
         "user" => [
             "id_usuario" => $usuario["id_usuario"],
             "nome_usuario" => $usuario["nome_usuario"],
