@@ -4,11 +4,8 @@
 
 use PhpParser\Node\Stmt\Switch_;
 
-<<<<<<< HEAD
-=======
 require_once __DIR__ . '/DetalheAporteRepository.php';
 
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quantidade_aporte, $valor_aporte, $recorrencia_aporte, $obs_aporte, $data_aporte)
 {
 
@@ -21,12 +18,8 @@ function criarAporte(PDO $conexao, $id_carteira, $id_ativo, $tipo_aporte, $quant
     recorrencia_aporte,
     observacao_aporte,
     data_aporte) 
-<<<<<<< HEAD
-    VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)"
-=======
     VALUES (:id_carteira, :id_ativo, :tipo_aporte, :quantidade_aporte, :valor_aporte, :recorrencia_aporte, :obs_aporte, :data_aporte)
     RETURNING id_aporte"
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
     );
 
     $sql->execute([
@@ -130,11 +123,7 @@ function listarAportesUsuario(PDO $conexao, $id_usuario, $id_carteira, $limite =
 
     $sql->execute([":id_usuario" => $id_usuario, ":id_carteira" => $id_carteira]);
 
-<<<<<<< HEAD
-    return $sql->fetchAll(PDO::FETCH_ASSOC);
-=======
     return anexarDetalhesAportes($conexao, $sql->fetchAll(PDO::FETCH_ASSOC));
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 
 
 }

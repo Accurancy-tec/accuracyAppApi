@@ -21,11 +21,7 @@ function criarCarteira()
         $walletStyle = $dados['estilo_carteira'];
         $walletGoals = $dados['meta_carteira'];
 
-<<<<<<< HEAD
-        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $walletGoals, $walletStyle);
-=======
         criarCarteiraService($conexao, $idUser, $nameWallet, $walletStyle, $walletGoals, $typeWallet);
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 
         echo json_encode([
             "success" => true,
@@ -48,19 +44,10 @@ function buscarCarteiras()
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
 
-<<<<<<< HEAD
-        if (empty($resultado)) {
-            echo json_encode([
-                'success' => false,
-                'message' => "Nenhuma carteira encontrada",
-                'resultado' => []
-            ]);
-=======
         // Sem carteiras: segue adiante e devolve success=true com a lista vazia
         // (antes enviava dois JSONs seguidos, o que quebrava o site).
         if (empty($resultado)) {
             $resultado = [];
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
         }
 
         foreach ($resultado as &$resultados) {
@@ -357,8 +344,6 @@ function excluirCarteira(): void
     }
 }
 
-<<<<<<< HEAD
-=======
 function buscarSaldoController()
 {
     global $conexao;
@@ -382,7 +367,6 @@ function buscarSaldoController()
     }
 }
 
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 function adicionarSaldoController()
 {
     global $conexao;

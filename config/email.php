@@ -112,9 +112,6 @@ function enviarCodigoBrevo($email, $codigo)
     }
 
     return true;
-<<<<<<< HEAD
-}
-=======
 }
 function enviarEmailBrevo($destino, $assunto, $html)
 {
@@ -157,4 +154,3 @@ function enviarEmailBrevo($destino, $assunto, $html)
 
     return true;
 }
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1

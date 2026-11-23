@@ -172,12 +172,8 @@ function usarToken(PDO $conexao, $token)
     return $stmtUsarToken->execute();
 }
 
-<<<<<<< HEAD
-function verificarEmail(PDO $conexao, $idUsuario){
-=======
 function verificarEmail(PDO $conexao, $idUsuario)
 {
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
     $sqlVerificarEmail = "
         UPDATE usuario
         SET
@@ -186,19 +182,6 @@ function verificarEmail(PDO $conexao, $idUsuario)
         WHERE id_usuario = :id_usuario
     ";
 
-<<<<<<< HEAD
-        $stmtVerificarEmail = $conexao->prepare(
-            $sqlVerificarEmail
-        );
-
-        $stmtVerificarEmail->bindValue(
-            ":id_usuario",
-            $idUsuario,
-            PDO::PARAM_INT
-        );
-
-        $stmtVerificarEmail->execute();
-=======
     $stmtVerificarEmail = $conexao->prepare(
         $sqlVerificarEmail
     );
@@ -313,5 +296,4 @@ function perfilRevogarSessoes(PDO $c, $id)
                        WHERE id_usuario = :id AND revogado_em IS NULL");
     $st->bindValue(":id", $id, PDO::PARAM_INT);
     return $st->execute();
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
 }

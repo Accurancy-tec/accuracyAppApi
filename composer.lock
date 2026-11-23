@@ -4,11 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-<<<<<<< HEAD
-    "content-hash": "9130992855f9a63212037036ec292e7e",
-=======
     "content-hash": "4379a9c3bb6046a0cc0c70fa78b05e6e",
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
     "packages": [
         {
             "name": "firebase/php-jwt",
@@ -77,8 +73,6 @@
             "time": "2026-06-11T17:54:14+00:00"
         },
         {
-<<<<<<< HEAD
-=======
             "name": "google/apiclient",
             "version": "v2.20.1",
             "source": {
@@ -264,7 +258,6 @@
             "time": "2026-10-16T21:30:20+00:00"
         },
         {
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
             "name": "graham-campbell/result-type",
             "version": "v1.2.0",
             "source": {
@@ -327,8 +320,6 @@
             "time": "2026-08-24T09:06:52+00:00"
         },
         {
-<<<<<<< HEAD
-=======
             "name": "guzzlehttp/guzzle",
             "version": "8.3.0",
             "source": {
@@ -763,7 +754,6 @@
             "time": "2026-09-29T19:21:12+00:00"
         },
         {
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
             "name": "phpmailer/phpmailer",
             "version": "v7.1.1",
             "source": {
@@ -921,8 +911,6 @@
             "time": "2026-08-24T00:54:40+00:00"
         },
         {
-<<<<<<< HEAD
-=======
             "name": "psr/cache",
             "version": "3.0.0",
             "source": {
@@ -1253,7 +1241,6 @@
             "time": "2026-06-05T06:23:12+00:00"
         },
         {
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
             "name": "symfony/polyfill-ctype",
             "version": "v1.37.0",
             "source": {
@@ -1506,8 +1493,6 @@
             "time": "2026-04-10T16:19:22+00:00"
         },
         {
-<<<<<<< HEAD
-=======
             "name": "symfony/polyfill-php82",
             "version": "v1.43.0",
             "source": {
@@ -1588,7 +1573,6 @@
             "time": "2026-09-25T15:50:05+00:00"
         },
         {
->>>>>>> dae6f5b8a9918ff7c55d2e9efe85906471f795c1
             "name": "vlucas/phpdotenv",
             "version": "v5.7.0",
             "source": {
