@@ -23,7 +23,6 @@ switch ($acao) {
     case 'login':
         login();
         break;
-
     case 'loginSite':
         loginSite();
         break;

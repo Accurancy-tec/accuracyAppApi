@@ -11,6 +11,7 @@ require_once __DIR__ . "/../Repositories/DetalheAporteRepository.php";
 require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/AutomacaoController.php";
+require_once __DIR__ . "/../Repositories/AporteRepository.php";
 
 function buscarAportesDoUsuario()
 {
