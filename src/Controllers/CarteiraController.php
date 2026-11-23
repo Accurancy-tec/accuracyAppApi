@@ -21,7 +21,7 @@ function criarCarteira()
         $walletStyle = $dados['estilo_carteira'];
         $walletGoals = $dados['meta_carteira'];
 
-        criarCarteiraService($conexao, $idUser, $nameWallet, $typeWallet, $walletGoals, $walletStyle);
+        criarCarteiraService($conexao, $idUser, $nameWallet, $walletStyle, $walletGoals, $typeWallet);
 
         echo json_encode([
             "success" => true,
@@ -44,12 +44,10 @@ function buscarCarteiras()
 
         $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
 
+        // Sem carteiras: segue adiante e devolve success=true com a lista vazia
+        // (antes enviava dois JSONs seguidos, o que quebrava o site).
         if (empty($resultado)) {
-            echo json_encode([
-                'success' => false,
-                'message' => "Nenhuma carteira encontrada",
-                'resultado' => []
-            ]);
+            $resultado = [];
         }
 
         foreach ($resultado as &$resultados) {
