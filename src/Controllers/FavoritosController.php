@@ -6,7 +6,7 @@ require_once __DIR__ . "/../../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Repositories/FavoritoRepository.php";
 
-const FAVORITOS_CATEGORIAS = ['Ações', 'FIIs', 'Cripto', 'Futuros', 'Internacional'];
+const FAVORITOS_CATEGORIAS = ['Ações', 'FIIs', 'Cripto', 'Futuros', 'Internacional', 'Renda Fixa'];
 
 // Overridable so tests can feed a request body without php://input.
 if (!function_exists('favoritosLerCorpo')) {
@@ -38,6 +38,9 @@ function favoritosNormalizarCategoria($valor): ?string
         'cripto' => 'Cripto',
         'futuros' => 'Futuros',
         'internacional' => 'Internacional',
+        'renda fixa' => 'Renda Fixa',
+        'rendafixa' => 'Renda Fixa',
+        'renda-fixa' => 'Renda Fixa',
     ];
     return $mapa[$chave] ?? null;
 }
