@@ -3,12 +3,12 @@
 // pra ninguém criar aporte recorrente em carteira de outra pessoa
 function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $estilo_carteira, $meta_carteira)
 {
-    $sql = "INSERT INTO carteira (id_usuario, nome_carteira, tipo_carteira, estilo_carteira, meta_carteira) VALUES (?, ?, ?, ?, ?) RETURNING id_carteira";
+    $sql = "INSERT INTO carteira (id_usuario, nome_carteira, estilo_carteira, tipo_carteira, meta_carteira) VALUES (?, ?, ?, ?, ?) RETURNING id_carteira";
     $insert = $conexao->prepare($sql);
     $insert->bindParam(1, $idUsuario);
     $insert->bindParam(2, $nomeCarteira);
-    $insert->bindParam(3, $tipoCarteira);
-    $insert->bindParam(4, $estilo_carteira);
+    $insert->bindParam(3, $estilo_carteira);
+    $insert->bindParam(4, $tipoCarteira);
     $insert->bindParam(5, $meta_carteira);
     $insert->execute();
 
