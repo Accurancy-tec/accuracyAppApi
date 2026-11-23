@@ -11,9 +11,18 @@ $dotenv->safeLoad();
 
 function autenticar()
 {
-    $headers = getallheaders();
+    // O cors.php já recompõe HTTP_AUTHORIZATION; getallheaders() fica como
+    // reserva, sem diferenciar maiúsculas de minúsculas ("authorization").
+    $authHeader = $_SERVER["HTTP_AUTHORIZATION"] ?? '';
 
-    $authHeader = $headers["Authorization"] ?? '';
+    if ($authHeader === '' && function_exists('getallheaders')) {
+        foreach (getallheaders() as $nome => $valor) {
+            if (strtolower($nome) === 'authorization') {
+                $authHeader = $valor;
+                break;
+            }
+        }
+    }
 
   if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
     http_response_code(401);
