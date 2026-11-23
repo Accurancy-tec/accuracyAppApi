@@ -90,31 +90,64 @@ function registrarUsuario()
     global $conexao;
 
     $dados = json_decode(file_get_contents("php://input"), true);
+    if (!is_array($dados)) {
+        $dados = [];
+    }
 
-    $nome = $dados['nome_usuario'];
-    $email = $dados['email_usuario'];
-    $senha = $dados['senha_usuario'];
-    $cpf = $dados['cpf_usuario'];
-    $telefone = $dados['telefone_usuario'];
+    $nome = trim((string) ($dados['nome_usuario'] ?? ''));
+    $email = trim((string) ($dados['email_usuario'] ?? ''));
+    $senha = (string) ($dados['senha_usuario'] ?? '');
+    $telefone = trim((string) ($dados['telefone_usuario'] ?? ''));
+    // O CPF não é mais usado: continua aceito (o site antigo pode enviar), mas é opcional.
+    $cpf = trim((string) ($dados['cpf_usuario'] ?? ''));
+    $cpf = $cpf === '' ? null : $cpf;
 
-    if (empty($nome) || empty($email) || empty($senha) || empty($cpf) || empty($telefone)) {
+    if ($nome === '' || $email === '' || $senha === '' || $telefone === '') {
         echo json_encode([
             "status" => "erro",
-            "mensagem" => "Todos os campos são obrigatórios."
+            "mensagem" => "Nome, e-mail, senha e telefone são obrigatórios."
+        ]);
+        exit;
+    }
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        echo json_encode([
+            "status" => "erro",
+            "mensagem" => "E-mail inválido."
         ]);
         exit;
     }
 
     $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
 
-    $usuario = registrarNovoUsuarioService(
-        $conexao,
-        $nome,
-        $email,
-        $senhaHash,
-        $cpf,
-        $telefone
-    );
+    try {
+        $usuario = registrarNovoUsuarioService(
+            $conexao,
+            $nome,
+            $email,
+            $senhaHash,
+            $cpf,
+            $telefone
+        );
+    } catch (PDOException $erro) {
+        // 23505 = já existe uma conta com este e-mail/telefone
+        if ($erro->getCode() === '23505') {
+            http_response_code(409);
+            echo json_encode([
+                "status" => "erro",
+                "mensagem" => "Já existe uma conta com este e-mail ou telefone."
+            ]);
+            exit;
+        }
+
+        error_log("Erro ao registrar usuário: " . $erro->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            "status" => "erro",
+            "mensagem" => "Não foi possível concluir o cadastro agora."
+        ]);
+        exit;
+    }
 
     $idUsuario = $usuario['id_usuario'];
 
