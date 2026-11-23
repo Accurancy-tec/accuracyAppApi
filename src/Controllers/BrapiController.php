@@ -593,6 +593,103 @@ function listarAtivosInternacionais(): void
         ],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
+/**
+ * Lista de FIIs sem o plano Pro: usa quote/list (subType=fii). Mantem o mesmo formato de
+ * resposta de listarFiis(); os campos detalhados (segmento, P/VP, DY...) ficam nulos.
+ */
+function listarFiisPadrao(int $page, int $limit, string $search, string $sortBy, string $sortOrder): void
+{
+    $mapaOrdenacao = [
+        'symbol' => 'name',
+        'name' => 'name',
+        'price' => 'close',
+    ];
+    $ordenarPor = $mapaOrdenacao[$sortBy] ?? 'volume';
+
+    $query = [
+        'type' => 'fund',
+        'subType' => 'fii',
+        'page' => $page,
+        'limit' => $limit,
+        'sortBy' => $ordenarPor,
+        'sortOrder' => $sortOrder,
+    ];
+    if ($search !== '') {
+        $query['search'] = $search;
+    }
+
+    $resposta = brapiRequest('quote/list', $query);
+    if (!$resposta['ok']) {
+        $status = (int) ($resposta['status'] ?? 502);
+        error_log('Erro ao listar FIIs (lista padrao). HTTP: ' . $status);
+        responderErroBrapi('Não foi possível consultar os FIIs na brapi.',
+            $status === 429 ? 429 : 502);
+        return;
+    }
+
+    $dados = json_decode((string) $resposta['body'], true);
+    if (!is_array($dados) || !isset($dados['stocks']) || !is_array($dados['stocks'])) {
+        error_log('Resposta da lista padrao de FIIs em formato inesperado.');
+        responderErroBrapi('Resposta inválida da brapi ao listar FIIs.');
+        return;
+    }
+
+    $stocks = [];
+    foreach ($dados['stocks'] as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $symbol = strtoupper(trim((string) ($item['stock'] ?? $item['symbol'] ?? '')));
+        if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+            continue;
+        }
+
+        $nome = $item['name'] ?? $item['longName'] ?? $item['shortName'] ?? $symbol;
+        $close = $item['close'] ?? $item['regularMarketPrice'] ?? null;
+        $change = $item['change'] ?? $item['regularMarketChangePercent'] ?? null;
+        $volume = $item['volume'] ?? $item['regularMarketVolume'] ?? null;
+        $logo = $item['logo'] ?? $item['logourl'] ?? $item['logoUrl'] ?? null;
+        if (!is_string($logo) || trim($logo) === '') {
+            $logo = 'https://icons.brapi.dev/icons/' . rawurlencode($symbol) . '.svg';
+        }
+
+        $stocks[] = [
+            'stock' => $symbol,
+            'name' => is_string($nome) && trim($nome) !== '' ? trim($nome) : $symbol,
+            'close' => is_numeric($close) && (float) $close > 0 ? (float) $close : null,
+            'change' => is_numeric($change) && is_finite((float) $change) ? (float) $change : null,
+            'volume' => is_numeric($volume) ? (int) $volume : null,
+            'logo' => $logo,
+            'marketTime' => null,
+            'segmentType' => null,
+            'segmentoAtuacao' => null,
+            'mandate' => null,
+            'tipoGestao' => null,
+            'navPerShare' => null,
+            'priceToNav' => null,
+            'dividendYield12m' => null,
+            'totalInvestors' => null,
+        ];
+    }
+
+    $paginacao = [];
+    if (isset($dados['currentPage']) || isset($dados['totalPages'])) {
+        $paginacao = $dados;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'stocks' => $stocks,
+        'paginacao' => [
+            'paginaAtual' => (int) ($paginacao['currentPage'] ?? $page),
+            'totalPaginas' => (int) ($paginacao['totalPages'] ?? 1),
+            'totalAtivos' => isset($paginacao['totalCount']) ? (int) $paginacao['totalCount'] : null,
+            'temProximaPagina' => (bool) ($paginacao['hasNextPage'] ?? false),
+        ],
+        'filtrosDetalhados' => false,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
 function listarFiis(): void
 {
     header('Content-Type: application/json; charset=UTF-8');
@@ -712,13 +809,11 @@ function listarFiis(): void
     if (!$respostaLista['ok']) {
         $status = (int) ($respostaLista['status'] ?? 502);
 
-        if ($status === 403) {
-            responderErroBrapi('O plano da brapi não liberou a listagem detalhada de FIIs.', 403);
-            return;
-        }
-
-        if ($status === 401) {
-            responderErroBrapi('A autenticação da brapi foi recusada. Verifique o token configurado.', 502);
+        // A lista detalhada (v2/fii/list) e exclusiva do plano Pro. Sem ela, usa a lista
+        // padrao da brapi (quote/list, tipo FII), que funciona em todos os planos.
+        if ($status === 401 || $status === 403) {
+            error_log('v2/fii/list recusada (HTTP ' . $status . '); usando a lista padrao de FIIs.');
+            listarFiisPadrao($page, $limit, $search, $sortBy, $sortOrder);
             return;
         }
 
@@ -927,6 +1022,60 @@ function getFiiQuote(): void
     echo $resultado['body'];
 }
 
+/**
+ * Historico diario de um FII pelo endpoint padrao (v2/stocks/historical), sem plano Pro.
+ * Retorna o mesmo formato de historicoFiis() ou null se a brapi recusar.
+ */
+function historicoFiisPadrao(string $symbol, string $range): ?array
+{
+    $rangeBusca = $range === '1d' ? '7d' : $range;
+    $resposta = brapiRequest('v2/stocks/historical', [
+        'symbols' => $symbol,
+        'range' => $rangeBusca,
+        'interval' => '1d',
+        'sortOrder' => 'asc',
+    ]);
+    if (!$resposta['ok']) {
+        error_log('Historico padrao de FII indisponivel. HTTP: ' . ($resposta['status'] ?? 0));
+        return null;
+    }
+
+    $dados = json_decode((string) $resposta['body'], true);
+    if (!is_array($dados) || !isset($dados['results']) || !is_array($dados['results'])) {
+        return null;
+    }
+
+    $results = [];
+    foreach ($dados['results'] as $item) {
+        if (!is_array($item)) continue;
+        $pontos = $item['data']['historicalDataPrice'] ?? [];
+        if (!is_array($pontos)) $pontos = [];
+
+        if ($range === '1d' && !empty($pontos)) {
+            usort($pontos, static function ($a, $b) {
+                $dataA = is_array($a) && is_numeric($a['date'] ?? null) ? (int) $a['date'] : 0;
+                $dataB = is_array($b) && is_numeric($b['date'] ?? null) ? (int) $b['date'] : 0;
+                return $dataA <=> $dataB;
+            });
+            $pontos = array_slice($pontos, -2);
+        }
+
+        $results[] = [
+            'requestedSymbol' => $symbol,
+            'symbol' => (string) ($item['symbol'] ?? $symbol),
+            'data' => [
+                'usedRange' => $range,
+                'usedInterval' => '1d',
+                'historicalDataPrice' => $pontos,
+            ],
+        ];
+    }
+    if (!$results) return null;
+
+    return ['results' => $results, 'requestedAt' => $dados['requestedAt'] ?? null,
+        'took' => $dados['took'] ?? null];
+}
+
 function historicoFiis(): void
 {
     header('Content-Type: application/json; charset=UTF-8');
@@ -962,8 +1111,14 @@ function historicoFiis(): void
 
     if (!$resultado['ok']) {
         $status = (int) ($resultado['status'] ?? 502);
-        if ($status === 403) {
-            responderErroBrapi('O plano da brapi não liberou o histórico diário deste FII.', 403);
+        // Historico detalhado (v2/fii/historical) e do plano Pro: usa o historico padrao.
+        if ($status === 401 || $status === 403) {
+            $padrao = historicoFiisPadrao($symbol, $range);
+            if ($padrao !== null) {
+                echo json_encode($padrao, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                return;
+            }
+            responderErroBrapi('Não foi possível consultar o histórico deste FII na brapi.', 502);
             return;
         }
         responderErroBrapi(
