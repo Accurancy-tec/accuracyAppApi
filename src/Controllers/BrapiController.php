@@ -280,7 +280,8 @@ function fiiDadosDaCotacao(array $item): array
 function fiiHistoricoFallback(array $symbols): array
 {
     $symbols = array_values(array_unique(array_filter(array_map(
-        static fn($s) => strtoupper(trim((string) $s)), $symbols
+        static fn($s) => strtoupper(trim((string) $s)),
+        $symbols
     ))));
     if (!$symbols) return [];
 
@@ -480,15 +481,19 @@ function listarAtivosInternacionais(): void
     $sortBy = trim((string) ($_GET['sortBy'] ?? 'volume'));
     $sortOrder = strtolower(trim((string) ($_GET['sortOrder'] ?? 'desc')));
 
-    if ($page === false || $page === null || $limit === false || $limit === null
-        || $page < 1 || $limit < 1 || $limit > 20) {
+    if (
+        $page === false || $page === null || $limit === false || $limit === null
+        || $page < 1 || $limit < 1 || $limit > 20
+    ) {
         responderErroBrapi('Página inválida ou limite fora do intervalo (1 a 20).', 400);
         return;
     }
 
     $ordenacoesPermitidas = ['name', 'close', 'change', 'change_abs', 'volume', 'market_cap_basic'];
-    if (!in_array($sortBy, $ordenacoesPermitidas, true)
-        || !in_array($sortOrder, ['asc', 'desc'], true)) {
+    if (
+        !in_array($sortBy, $ordenacoesPermitidas, true)
+        || !in_array($sortOrder, ['asc', 'desc'], true)
+    ) {
         responderErroBrapi('Critério de ordenação inválido.', 400);
         return;
     }
@@ -521,8 +526,10 @@ function listarAtivosInternacionais(): void
         $resposta = brapiRequest('quote/list', $query);
         if (!$resposta['ok']) {
             $status = (int) ($resposta['status'] ?? 502);
-            responderErroBrapi('Não foi possível consultar BDRs e ETFs na brapi.',
-                $status >= 400 && $status < 600 ? $status : 502);
+            responderErroBrapi(
+                'Não foi possível consultar BDRs e ETFs na brapi.',
+                $status >= 400 && $status < 600 ? $status : 502
+            );
             return;
         }
 
@@ -911,8 +918,10 @@ function getFiiQuote(): void
     $resultado = brapiRequest('quote/' . rawurlencode($ticker));
     if (!$resultado['ok']) {
         $status = (int) ($resultado['status'] ?? 502);
-        responderErroBrapi('Não foi possível consultar a cotação do FII na brapi.',
-            $status >= 400 && $status < 600 ? $status : 502);
+        responderErroBrapi(
+            'Não foi possível consultar a cotação do FII na brapi.',
+            $status >= 400 && $status < 600 ? $status : 502
+        );
         return;
     }
     echo $resultado['body'];
@@ -923,8 +932,14 @@ function historicoFiis(): void
     header('Content-Type: application/json; charset=UTF-8');
     $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
     $range = trim((string) ($_GET['range'] ?? '3mo'));
-    $intervalos = ['1d' => '-7 days', '7d' => '-7 days', '1mo' => '-1 month', '3mo' => '-3 months',
-        '6mo' => '-6 months', '1y' => '-1 year'];
+    $intervalos = [
+        '1d' => '-7 days',
+        '7d' => '-7 days',
+        '1mo' => '-1 month',
+        '3mo' => '-3 months',
+        '6mo' => '-6 months',
+        '1y' => '-1 year'
+    ];
 
     if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
         responderErroBrapi('Ticker de FII ausente ou inválido.', 400);
@@ -951,8 +966,10 @@ function historicoFiis(): void
             responderErroBrapi('O plano da brapi não liberou o histórico diário deste FII.', 403);
             return;
         }
-        responderErroBrapi('Não foi possível consultar o histórico diário do FII na brapi.',
-            $status >= 400 && $status < 600 ? $status : 502);
+        responderErroBrapi(
+            'Não foi possível consultar o histórico diário do FII na brapi.',
+            $status >= 400 && $status < 600 ? $status : 502
+        );
         return;
     }
 
@@ -991,8 +1008,11 @@ function historicoFiis(): void
             ],
         ];
     }
-    echo json_encode(['results' => $results, 'requestedAt' => $dados['requestedAt'] ?? null,
-        'took' => $dados['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode([
+        'results' => $results,
+        'requestedAt' => $dados['requestedAt'] ?? null,
+        'took' => $dados['took'] ?? null
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
 /**
@@ -1112,8 +1132,10 @@ function listarContratosFuturos(): void
         responderErroBrapi('Pagina invalida ou limite fora do intervalo (1 a 20).', 400);
         return;
     }
-    if (!in_array($sortBy, ['symbol', 'expirationDate', 'underlyingAsset'], true)
-        || !in_array($sortOrder, ['asc', 'desc'], true)) {
+    if (
+        !in_array($sortBy, ['symbol', 'expirationDate', 'underlyingAsset'], true)
+        || !in_array($sortOrder, ['asc', 'desc'], true)
+    ) {
         responderErroBrapi('Criterio de ordenacao de contratos invalido.', 400);
         return;
     }
@@ -1245,10 +1267,12 @@ function listarContratosFuturos(): void
                 continue;
             }
             $symbolCurva = strtoupper(trim((string) ($contratoCurva['symbol'] ?? '')));
-            if ($symbolCurva !== '' && isset($quotesBySymbol[$symbolCurva])
+            if (
+                $symbolCurva !== '' && isset($quotesBySymbol[$symbolCurva])
                 && (is_numeric($quotesBySymbol[$symbolCurva]['settlement'] ?? null)
                     || is_numeric($quotesBySymbol[$symbolCurva]['settlementRate'] ?? null)
-                    || is_numeric($quotesBySymbol[$symbolCurva]['close'] ?? null))) {
+                    || is_numeric($quotesBySymbol[$symbolCurva]['close'] ?? null))
+            ) {
                 continue;
             }
             if ($symbolCurva !== '') {
@@ -1395,7 +1419,7 @@ function getFutureQuote(): void
             'regularMarketChangePercent' => is_numeric($quote['oscillationPct'] ?? null) ? (float) $quote['oscillationPct'] : null,
             'regularMarketTime' => $time,
             'regularMarketOpen' => null,
-            'regularMarketDayHigh' => (!$isRate &&is_numeric($quote['high'] ?? null)) ? (float) $quote['high'] : null,
+            'regularMarketDayHigh' => (!$isRate && is_numeric($quote['high'] ?? null)) ? (float) $quote['high'] : null,
             'fiftyTwoWeekHigh' => null,
             'fiftyTwoWeekLow' => null,
             'currency' => (string) ($quote['tradingCurrency'] ?? 'BRL'),
@@ -1409,8 +1433,10 @@ function getFutureQuote(): void
         responderErroBrapi('A brapi não retornou cotação para este contrato futuro.', 404);
         return;
     }
-    echo json_encode(['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null],
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(
+        ['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null],
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
 }
 
 function historicoFuturos(): void
@@ -1419,8 +1445,12 @@ function historicoFuturos(): void
     $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
     $range = trim((string) ($_GET['range'] ?? '3mo'));
     $intervalos = [
-        '1d' => '-7 days', '7d' => '-7 days', '1mo' => '-1 month',
-        '3mo' => '-3 months', '6mo' => '-6 months', '1y' => '-1 year',
+        '1d' => '-7 days',
+        '7d' => '-7 days',
+        '1mo' => '-1 month',
+        '3mo' => '-3 months',
+        '6mo' => '-6 months',
+        '1y' => '-1 year',
     ];
     if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
         responderErroBrapi('Código do contrato futuro ausente ou inválido.', 400);
@@ -1485,10 +1515,14 @@ function historicoFuturos(): void
         'symbol' => (string) ($future['symbol'] ?? $symbol),
         'data' => ['usedRange' => $range, 'usedInterval' => '1d', 'historicalDataPrice' => $points],
     ]];
-    echo json_encode(['results' => $results, 'requestedAt' => $body['requestedAt'] ?? null,
-        'took' => $body['took'] ?? null], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode([
+        'results' => $results,
+        'requestedAt' => $body['requestedAt'] ?? null,
+        'took' => $body['took'] ?? null
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
-function patrimonioCarteirasAcaoController(): void {
+function patrimonioCarteirasAcaoController(): void
+{
 
     global $conexao;
     header('Content-Type: application/json; charset=UTF-8');
@@ -1497,7 +1531,7 @@ function patrimonioCarteirasAcaoController(): void {
         $idUsuario = autenticar();
         $resultado = getCarteirasDoUsuario($conexao, $idUsuario);
         $idCarteira = $resultado['id_carteira'];
-        
+
         $resultado = patrimonioCarteirasAcaoService(
             $conexao,
             $idUsuario,
@@ -1516,11 +1550,10 @@ function patrimonioCarteirasAcaoController(): void {
             $resultado,
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
-
     } catch (Throwable $erro) {
         error_log(
             'Erro em patrimonioCarteirasController: ' .
-            $erro->getMessage()
+                $erro->getMessage()
         );
 
         http_response_code(500);
@@ -1530,4 +1563,92 @@ function patrimonioCarteirasAcaoController(): void {
             'message' => 'Erro interno ao consultar o patrimônio.'
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
+}
+
+function listarFiisCatalogo(): void
+{
+    header("Content-Type: application/json; charset=UTF-8");
+
+    $pagina = filter_var(
+        $_GET["page"] ?? 1,
+        FILTER_VALIDATE_INT
+    );
+
+    $limite = filter_var(
+        $_GET["limit"] ?? 20,
+        FILTER_VALIDATE_INT
+    );
+
+    if (
+        $pagina === false ||
+        $limite === false ||
+        $pagina < 1 ||
+        $limite < 1 ||
+        $limite > 20
+    ) {
+        http_response_code(400);
+        echo json_encode([
+            "success" => false,
+            "message" => "Paginação inválida."
+        ]);
+        return;
+    }
+
+    $resultado = brapiRequest("quote/list", [
+        "subType" => "fii",
+        "page" => $pagina,
+        "limit" => $limite,
+        "sortBy" => "volume",
+        "sortOrder" => "desc"
+    ]);
+
+    if (!$resultado["ok"]) {
+        http_response_code(502);
+        echo json_encode([
+            "success" => false,
+            "message" => "Não foi possível consultar os FIIs."
+        ]);
+        return;
+    }
+
+    $dados = json_decode($resultado["body"], true);
+
+    if (!is_array($dados)) {
+        http_response_code(502);
+        echo json_encode([
+            "success" => false,
+            "message" => "Resposta inválida da BRAPI."
+        ]);
+        return;
+    }
+
+    $ativos = [];
+
+    foreach (($dados["stocks"] ?? []) as $ativo) {
+        if (($ativo["subType"] ?? "") !== "fii") {
+            continue;
+        }
+
+        $ativos[] = [
+            "stock" => $ativo["stock"],
+            "name" => $ativo["name"] ?? $ativo["stock"],
+            "close" => $ativo["close"] ?? null,
+            "change" => $ativo["change"] ?? null,
+            "volume" => $ativo["volume"] ?? null,
+            "logo" => $ativo["logo"] ?? null
+        ];
+    }
+
+    $totalPaginas = (int) ($dados["totalPages"] ?? 1);
+
+    echo json_encode([
+        "success" => true,
+        "stocks" => $ativos,
+        "paginacao" => [
+            "paginaAtual" => $pagina,
+            "totalPaginas" => $totalPaginas,
+            "temProximaPagina" =>
+            (bool) ($dados["hasNextPage"] ?? false)
+        ]
+    ], JSON_UNESCAPED_UNICODE);
 }
