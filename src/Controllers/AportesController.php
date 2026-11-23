@@ -71,30 +71,24 @@ function fazerAporte()
     $isFixedIncome = $categoriaAtivo === CATEGORIA_RENDA_FIXA || isset($dados['id_titulo']);
     $fixedIncomeTitle = null;
 
-    $idUsuario = autenticar();
-
-    /*if (!$idWallet || !carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
-        http_response_code(403);
-        echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida @."]);
+    // id_carteira é obrigatório: sem ele o aporte seria gravado sem carteira.
+    if (!$idWallet) {
+        http_response_code(400);
+        echo json_encode([
+            "sucesso" => false,
+            "mensagem" => "Informe a carteira do aporte."
+        ], JSON_UNESCAPED_UNICODE);
         exit;
-    }*/
+    }
 
     try {
-        if ($idWallet) {
-            if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
-                http_response_code(403);
-                echo json_encode(["sucesso" => false, "mensagem" => "Carteira inválida !."]);
-                exit;
-            }
-        } else {
-            // O app ainda não envia id_carteira: usa a carteira mais antiga do
-            // usuário (a lista vem do mais novo pro mais antigo) e, se ele não
-            // tiver nenhuma, cria a "Carteira principal".
-            $carteirasDoUsuario = getCarteirasDoUsuarioService($conexao, $idUsuario);
-
-            /*$idWallet = $carteirasDoUsuario
-                ? end($carteirasDoUsuario)["id_carteira"]
-                : criarCarteiraService($conexao, $idUsuario, "Carteira principal", "Real");*/
+        if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
+            http_response_code(403);
+            echo json_encode([
+                "sucesso" => false,
+                "mensagem" => "Carteira inválida."
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
         }
 
         // Renda fixa: simbolo, nome, valor e condicoes vem do cadastro do titulo (nunca do app).
