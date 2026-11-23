@@ -43,8 +43,14 @@ class GoogleAuthController
                 }
 
                 // 2) Já existe usuário com esse e-mail? Se não, cria.
-                $id = $this->oauthRepo->buscarUsuarioPorEmail($dados['email'])
-                    ?? $this->oauthRepo->criarUsuario($dados['nome'], $dados['email']);
+                $existente = $this->oauthRepo->buscarUsuarioPorEmail($dados['email']);
+                if ($existente !== null) {
+                    // o Google já confirmou esse e-mail
+                    $this->oauthRepo->marcarEmailVerificado($existente);
+                    $id = $existente;
+                } else {
+                    $id = $this->oauthRepo->criarUsuario($dados['nome'], $dados['email']);
+                }
 
                 // 3) Liga o usuário à conta Google
                 $this->oauthRepo->criarVinculo($id, 'Google', $dados['sub'], $dados['email']);
@@ -60,6 +66,15 @@ class GoogleAuthController
 
             $token = $this->gerarToken($usuario);
 
+            // refresh token (como no auth/login): sem ele o app perderia a sessão em 15 minutos
+            require_once __DIR__ . '/../Middleware/Authentication.php';
+            $refreshToken = \criarRefreshToken();
+            $this->oauthRepo->criarSessao(
+                (string) $usuario['id_usuario'],
+                \criarHashRefreshToken($refreshToken),
+                date('Y-m-d H:i:s', time() + (60 * 60 * 24 * 30))
+            );
+
         } catch (\Throwable $e) {
             error_log('Erro no login com Google: ' . $e->getMessage());
 
@@ -71,9 +86,10 @@ class GoogleAuthController
         }
 
         $this->responder(200, [
-            'success' => true,
-            'token'   => $token,
-            'user'    => $usuario,
+            'success'      => true,
+            'token'        => $token,
+            'refreshToken' => $refreshToken,
+            'user'         => $usuario,
         ]);
     }
 
