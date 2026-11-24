@@ -3,6 +3,14 @@ require_once __DIR__ . '/../src/Controllers/CursoController.php';
 
 $acao = $partes[1] ?? null;
 
+// Accuracy: rotas adicionais de atividades e progresso.
+// As rotas originais continuam abaixo, com suas regras intactas.
+if (in_array($acao, ['atividades', 'progresso', 'salvar-progresso'], true)) {
+    require_once __DIR__ . '/../src/Controllers/ProgressoController.php';
+    accuracyCursosProgressoController($acao);
+    return;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
 
