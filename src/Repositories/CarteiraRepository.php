@@ -33,6 +33,7 @@ function getCarteirasDoUsuario(PDO $conexao, $id_usuario)
                 c.id_carteira,
                 c.nome_carteira,
                 c.tipo_carteira,
+                c.estilo_carteira,
                 c.meta_carteira,
 
                 COALESCE(
