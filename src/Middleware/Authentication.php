@@ -9,44 +9,81 @@ use Dotenv\Dotenv;
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
 $dotenv->safeLoad();
 
+function obterHeaderAutorizacao(): string
+{
+    $valores = [];
+
+    foreach (["HTTP_AUTHORIZATION", "REDIRECT_HTTP_AUTHORIZATION", "Authorization"] as $chave) {
+        if (isset($_SERVER[$chave]) && is_string($_SERVER[$chave])) {
+            $valores[] = $_SERVER[$chave];
+        }
+    }
+
+    foreach (["getallheaders", "apache_request_headers"] as $funcao) {
+        if (!function_exists($funcao)) {
+            continue;
+        }
+
+        $headers = $funcao();
+        if (!is_array($headers)) {
+            continue;
+        }
+
+        foreach ($headers as $nome => $valor) {
+            if (is_string($nome) && strtolower($nome) === "authorization" && is_string($valor)) {
+                $valores[] = $valor;
+            }
+        }
+    }
+
+    foreach ($valores as $valor) {
+        $valor = trim($valor);
+        if (preg_match('/^Bearer\s+\S+$/i', $valor)) {
+            return $valor;
+        }
+    }
+
+    return "";
+}
+
 function autenticar()
 {
-    // O cors.php já recompõe HTTP_AUTHORIZATION; getallheaders() fica como
-    // reserva, sem diferenciar maiúsculas de minúsculas ("authorization").
-    $authHeader = $_SERVER["HTTP_AUTHORIZATION"] ?? '';
+    $authHeader = obterHeaderAutorizacao();
 
-    $authHeader = $headers["Authorization"] ?? '';
+    if (!preg_match('/^Bearer\s+(\S+)$/i', trim($authHeader), $matches)) {
+        http_response_code(401);
+        echo json_encode(["erro" => "Token não enviado"], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
-  if (!preg_match('/Bearer\s+(\S+)/', $authHeader, $matches)) {
-    http_response_code(401);
+    $secretKey = $_ENV["SECRET_KEY"] ?? getenv("SECRET_KEY");
+    if (!is_string($secretKey) || trim($secretKey) === "") {
+        error_log("Authentication: SECRET_KEY não está configurada.");
+        http_response_code(500);
+        echo json_encode(["erro" => "Configuração de autenticação indisponível."], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
-    echo json_encode([
-        "erro" => "Token não enviado"
-    ]);
-
-    exit;
-}
     try {
-
         $decoded = JWT::decode(
             $matches[1],
-            new Key($_ENV["SECRET_KEY"], "HS256")
+            new Key($secretKey, "HS256")
         );
 
+        if (!isset($decoded->sub)) {
+            throw new UnexpectedValueException("Token sem identificador de usuário.");
+        }
+
         return $decoded->sub;
-    } catch (Exception $ex) {
-
+    } catch (Throwable $ex) {
         http_response_code(401);
-
         echo json_encode([
             "erro" => "Token inválido ou expirado",
             "detalhe" => $ex->getMessage()
-        ]);
-
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 }
-
 function criarToken($idUsuario)
 {
     $payload = [

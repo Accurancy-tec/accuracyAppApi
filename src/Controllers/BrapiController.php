@@ -701,30 +701,97 @@ function listarFiis(): void
     }
 
     $respostaLista = brapiRequest('v2/fii/list', $query);
+    $dadosLista = null;
 
-    if (!$respostaLista['ok']) {
+    if ($respostaLista['ok']) {
+        $dadosLista = json_decode((string) $respostaLista['body'], true);
+    }
+
+    if (!is_array($dadosLista) || !isset($dadosLista['fiis']) || !is_array($dadosLista['fiis']) || count($dadosLista['fiis']) === 0) {
+        $queryCatalogo = [
+            'subType' => 'fii',
+            'page' => $page,
+            'limit' => $limit,
+            'sortBy' => 'volume',
+            'sortOrder' => $sortOrder
+        ];
+
+        if ($search !== '') {
+            $queryCatalogo['search'] = $search;
+        }
+
+        $respostaCatalogo = brapiRequest('quote/list', $queryCatalogo);
+        if ($respostaCatalogo['ok']) {
+            $dadosCatalogo = json_decode((string) $respostaCatalogo['body'], true);
+
+            if (is_array($dadosCatalogo) && isset($dadosCatalogo['stocks']) && is_array($dadosCatalogo['stocks'])) {
+                $fiisCatalogo = [];
+
+                foreach ($dadosCatalogo['stocks'] as $ativo) {
+                    if (!is_array($ativo)) {
+                        continue;
+                    }
+
+                    $subType = strtolower(trim((string) ($ativo['subType'] ?? '')));
+                    if ($subType !== '' && $subType !== 'fii') {
+                        continue;
+                    }
+
+                    $symbol = strtoupper(trim((string) ($ativo['stock'] ?? $ativo['symbol'] ?? '')));
+                    if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
+                        continue;
+                    }
+
+                    $fiisCatalogo[] = [
+                        'symbol' => $symbol,
+                        'name' => $ativo['name'] ?? $symbol,
+                        'price' => $ativo['close'] ?? null,
+                        'volume' => $ativo['volume'] ?? null,
+                        'logo' => $ativo['logo'] ?? null,
+                        'subType' => 'fii'
+                    ];
+                }
+
+                $paginationCatalogo = $dadosCatalogo['pagination'] ?? [];
+                if (!is_array($paginationCatalogo)) {
+                    $paginationCatalogo = [];
+                }
+
+                $paginaCatalogo = (int) ($dadosCatalogo['page'] ?? $paginationCatalogo['page'] ?? $page);
+                $totalPaginasCatalogo = (int) ($dadosCatalogo['totalPages'] ?? $paginationCatalogo['totalPages'] ?? 1);
+                $totalAtivosCatalogo = (int) ($dadosCatalogo['totalItems'] ?? $paginationCatalogo['total'] ?? count($fiisCatalogo));
+                $temProximaPaginaCatalogo = (bool) ($dadosCatalogo['hasNextPage'] ?? ($paginaCatalogo < $totalPaginasCatalogo));
+
+                $dadosLista = [
+                    'fiis' => $fiisCatalogo,
+                    'pagination' => [
+                        'page' => max(1, $paginaCatalogo),
+                        'totalPages' => max(1, $totalPaginasCatalogo),
+                        'totalItems' => max(0, $totalAtivosCatalogo),
+                        'hasNextPage' => $temProximaPaginaCatalogo
+                    ]
+                ];
+
+                error_log('FIIs: usando quote/list como fallback para a listagem detalhada.');
+            }
+        }
+    }
+
+    if (!is_array($dadosLista) || !isset($dadosLista['fiis']) || !is_array($dadosLista['fiis'])) {
         $status = (int) ($respostaLista['status'] ?? 502);
 
         if ($status === 403) {
-            responderErroBrapi('O plano da brapi não liberou a listagem detalhada de FIIs.', 403);
+            responderErroBrapi('A listagem detalhada de FIIs falhou e o catálogo alternativo não respondeu.', 502);
             return;
         }
 
         if ($status === 401) {
-            responderErroBrapi('A autenticação da brapi foi recusada. Verifique o token configurado.', 502);
+            responderErroBrapi('A autenticação da brapi foi recusada na listagem de FIIs. Verifique o token configurado.', 502);
             return;
         }
 
-        error_log('Erro ao listar FIIs na brapi. HTTP: ' . $status);
+        error_log('Falha na listagem de FIIs. HTTP primário: ' . $status);
         responderErroBrapi('Não foi possível consultar os FIIs na brapi.', 502);
-        return;
-    }
-
-    $dadosLista = json_decode((string) $respostaLista['body'], true);
-
-    if (!is_array($dadosLista) || !isset($dadosLista['fiis']) || !is_array($dadosLista['fiis'])) {
-        error_log('Resposta de listagem de FIIs em formato inesperado.');
-        responderErroBrapi('Resposta inválida da brapi ao listar FIIs.');
         return;
     }
 
