@@ -58,7 +58,8 @@ function listarHistoricoAportesUsuario(PDO $conexao, $idUsuario, array $filtros 
             a.tipo_aporte,
             a.recorrencia_aporte,
             a.observacao_aporte,
-            to_char(a.data_aporte, 'YYYY-MM-DD') AS data_aporte
+            to_char(a.data_aporte, 'YYYY-MM-DD') AS data_aporte,
+            to_char(a.criado_em, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS registrado_em
         FROM aporte a
         INNER JOIN carteira c ON c.id_carteira = a.id_carteira
         INNER JOIN ativo ati ON ati.id_ativo = a.id_ativo
@@ -132,7 +133,8 @@ function listarDepositosUsuario(PDO $conexao, $idUsuario, array $filtros = []): 
             c.nome_carteira,
             t.valor,
             t.descricao,
-            to_char(t.data_transacao, 'YYYY-MM-DD') AS data
+            to_char(t.data_transacao, 'YYYY-MM-DD') AS data,
+            to_char(t.data_transacao, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS registrado_em
         FROM transacao_saldo t
         LEFT JOIN carteira c ON c.id_carteira = t.id_carteira
         WHERE " . implode(" AND ", $condicoes) . "
