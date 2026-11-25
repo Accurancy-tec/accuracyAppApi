@@ -58,6 +58,17 @@ function login()
         exit;
     }
 
+    // Só entra quem confirmou o e-mail (o app abre a tela do código quando recebe este aviso).
+    if (!perfilVerdadeiro($usuario["email_verificado_usuario"] ?? false)) {
+        echo json_encode([
+            "success" => false,
+            "email_nao_verificado" => true,
+            "email_usuario" => $usuario["email_usuario"],
+            "message" => "Confirme seu e-mail para entrar."
+        ]);
+        exit;
+    }
+
     $accessToken = criarToken($usuario["id_usuario"]);
 
     $refreshToken = criarRefreshToken();
@@ -531,6 +542,7 @@ function verifyEmail()
                 "status" => "erro",
                 "mensagem" => "E-mail inválido."
             ]);
+            exit;
         }
 
         if (!preg_match("/^[0-9]{6}$/", $codigo)) {
@@ -748,7 +760,94 @@ function perfilObter()
         perfilResponder(404, ["success" => false, "message" => "Usuário não encontrado."]);
     }
 
+    $usuario["email_verificado_usuario"] = perfilVerdadeiro($usuario["email_verificado_usuario"] ?? false);
+    $usuario["google_vinculado"] = perfilGoogleVinculado($conexao, $id);
+
     perfilResponder(200, ["success" => true, "user" => $usuario]);
+}
+
+// POST /auth/googleConfig -> ID do cliente Web do Google (valor público) para o app iniciar o login
+function googleConfig()
+{
+    $clientId = $_ENV["GOOGLE_CLIENT_ID_WEB"] ?? getenv("GOOGLE_CLIENT_ID_WEB") ?: "";
+
+    if ($clientId === "") {
+        perfilResponder(503, ["success" => false, "message" => "Login com Google indisponível no momento."]);
+    }
+
+    perfilResponder(200, ["success" => true, "client_id" => $clientId]);
+}
+
+// POST /auth/perfilAtualizar   {nome_usuario?, telefone_usuario?}  (só os campos enviados mudam)
+function perfilAtualizar()
+{
+    global $conexao;
+    $id = autenticar();
+
+    $dados = perfilEntrada();
+
+    $nome = null;
+    if (array_key_exists("nome_usuario", $dados)) {
+        $nome = preg_replace("/\s+/u", " ", trim((string) $dados["nome_usuario"]));
+        $tamanho = mb_strlen($nome, "UTF-8");
+        if ($tamanho < 2 || $tamanho > 100) {
+            perfilResponder(400, ["success" => false, "message" => "Informe um nome com 2 a 100 caracteres."]);
+        }
+    }
+
+    $mudarTelefone = array_key_exists("telefone_usuario", $dados);
+    $telefone = null;
+    if ($mudarTelefone) {
+        $telefone = perfilNormalizarTelefone((string) $dados["telefone_usuario"]);
+        if ($telefone === null) {
+            perfilResponder(400, ["success" => false, "message" => "Informe o telefone com DDD, por exemplo (11) 91234-5678."]);
+        }
+    }
+
+    if ($nome === null && !$mudarTelefone) {
+        perfilResponder(400, ["success" => false, "message" => "Nenhum dado para atualizar."]);
+    }
+
+    try {
+        perfilAtualizarDados($conexao, $id, $nome, $telefone, $mudarTelefone);
+    } catch (PDOException $erro) {
+        if ($erro->getCode() === "23505") {
+            perfilResponder(409, ["success" => false, "message" => "Este telefone já está em uso por outra conta."]);
+        }
+        error_log("Erro ao atualizar perfil: " . $erro->getMessage());
+        perfilResponder(500, ["success" => false, "message" => "Não foi possível salvar agora."]);
+    }
+
+    $usuario = perfilBuscarUsuario($conexao, $id);
+    $usuario["email_verificado_usuario"] = perfilVerdadeiro($usuario["email_verificado_usuario"] ?? false);
+    $usuario["google_vinculado"] = perfilGoogleVinculado($conexao, $id);
+
+    perfilResponder(200, ["success" => true, "message" => "Dados atualizados.", "user" => $usuario]);
+}
+
+// "" (apagar) ou telefone BR com DDD no formato (11) 91234-5678; null se for inválido
+function perfilNormalizarTelefone(string $valor): ?string
+{
+    $digitos = preg_replace("/\D+/", "", $valor);
+
+    if ($digitos === "") {
+        return "";
+    }
+
+    // aceita o código do país (+55)
+    if (strlen($digitos) > 11 && strpos($digitos, "55") === 0) {
+        $digitos = substr($digitos, 2);
+    }
+
+    if (strlen($digitos) === 11) {
+        return sprintf("(%s) %s-%s", substr($digitos, 0, 2), substr($digitos, 2, 5), substr($digitos, 7));
+    }
+
+    if (strlen($digitos) === 10) {
+        return sprintf("(%s) %s-%s", substr($digitos, 0, 2), substr($digitos, 2, 4), substr($digitos, 6));
+    }
+
+    return null;
 }
 
 // POST /perfil/foto   (multipart/form-data, campo "foto")

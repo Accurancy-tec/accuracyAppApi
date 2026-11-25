@@ -85,6 +85,23 @@ class OAuthRepository
         return (string) $stmt->fetchColumn();
     }
 
+    /** O Google já confirmou esse e-mail: a conta existente passa a contar como verificada. */
+    public function marcarEmailVerificado(string $idUsuario): void
+    {
+        $this->pdo->prepare(
+            'UPDATE usuario SET email_verificado_usuario = TRUE WHERE id_usuario = ? AND email_verificado_usuario IS NOT TRUE'
+        )->execute([$idUsuario]);
+    }
+
+    /** Sessão do app (mesma tabela do auth/login) para o refresh token do login com Google. */
+    public function criarSessao(string $idUsuario, string $refreshTokenHash, string $expiraEm): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO Sessao_Usuario (id_usuario, refresh_token_hash, dispositivo_sessao, expira_em)
+             VALUES (?, ?, ?, ?)'
+        )->execute([$idUsuario, $refreshTokenHash, 'Android Accuracy', $expiraEm]);
+    }
+
     public function criarVinculo(string $idUsuario, string $provedor, string $idExterno, string $email): void
     {
         $this->pdo->prepare(

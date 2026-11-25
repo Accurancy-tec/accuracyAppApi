@@ -1,7 +1,7 @@
 <?php
 function loginUsuario(PDO $conexao, $email)
 {
-    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
+    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
 
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(":email_usuario", $email);
@@ -196,11 +196,52 @@ function verificarEmail(PDO $conexao, $idUsuario)
 }
 function perfilBuscarUsuario(PDO $c, $id)
 {
-    $st = $c->prepare("SELECT id_usuario, nome_usuario, email_usuario, foto_usuario
+    $st = $c->prepare("SELECT id_usuario, nome_usuario, email_usuario, foto_usuario,
+                              telefone_usuario, email_verificado_usuario
                        FROM usuario WHERE id_usuario = :id LIMIT 1");
     $st->bindValue(":id", $id, PDO::PARAM_INT);
     $st->execute();
     return $st->fetch(PDO::FETCH_ASSOC);
+}
+
+// true quando a conta tem login com Google vinculado (nunca derruba o perfil se a consulta falhar)
+function perfilGoogleVinculado(PDO $c, $id): bool
+{
+    try {
+        $st = $c->prepare("SELECT 1 FROM oauth WHERE id_usuario = :id AND provedor_oauth = 'Google' LIMIT 1");
+        $st->bindValue(":id", $id, PDO::PARAM_INT);
+        $st->execute();
+        return $st->fetchColumn() !== false;
+    } catch (Throwable $e) {
+        error_log("Falha ao consultar vínculo Google: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Atualiza nome e/ou telefone (null = não mexer). Telefone "" apaga o telefone.
+function perfilAtualizarDados(PDO $c, $id, ?string $nome, ?string $telefone, bool $mudarTelefone)
+{
+    $sets = [];
+    if ($nome !== null) {
+        $sets[] = "nome_usuario = :nome";
+    }
+    if ($mudarTelefone) {
+        $sets[] = "telefone_usuario = :telefone";
+    }
+    if (!$sets) {
+        return true;
+    }
+
+    $st = $c->prepare("UPDATE usuario SET " . implode(", ", $sets) . ", atualizado_em = NOW()
+                       WHERE id_usuario = :id");
+    if ($nome !== null) {
+        $st->bindValue(":nome", $nome);
+    }
+    if ($mudarTelefone) {
+        $st->bindValue(":telefone", $telefone === "" ? null : $telefone, $telefone === "" ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    }
+    $st->bindValue(":id", $id, PDO::PARAM_INT);
+    return $st->execute();
 }
 
 function perfilSalvarFoto(PDO $c, $id, $url)

@@ -32,6 +32,10 @@ switch ($acao) {
         loginGoogle();
         break;
 
+    case 'googleConfig':
+        googleConfig();
+        break;
+
     case 'registrarNovoUsuario':
         registrarUsuario();
         break;
@@ -50,6 +54,10 @@ switch ($acao) {
 
     case 'perfilObter':
         perfilObter();
+        break;
+
+    case 'perfilAtualizar':
+        perfilAtualizar();
         break;
 
     case 'perfilFoto':
