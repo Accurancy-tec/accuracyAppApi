@@ -63,22 +63,46 @@ function numeroPositivo($valor): ?float
     return is_numeric($valor) && is_finite((float) $valor) && (float) $valor > 0 ? (float) $valor : null;
 }
 
-/** Cotação atual usada para conferir o preço enviado pelo cliente (null quando não há cotação). */
-function cotacaoDeReferencia(string $categoria, string $simbolo): ?float
+/**
+ * Cotação atual usada para conferir o ativo e o preço enviados pelo cliente.
+ *
+ * Devolve ["existe" => bool|null, "preco" => float|null]. "existe" é false quando a
+ * brapi responde que o código não existe; null quando não deu para confirmar
+ * (provedor fora do ar, limite de consultas ou categoria sem cotação de mercado).
+ */
+function cotacaoDeReferencia(string $categoria, string $simbolo): array
 {
-    try {
-        if (in_array($categoria, CATEGORIAS_COM_COTACAO_DE_MERCADO, true) && simboloNegociadoNaB3($simbolo)) {
-            return cotacoesAtuaisB3([$simbolo])[$simbolo] ?? null;
-        }
+    $endpoint = null;
+    $query = [];
 
-        if ($categoria === "Cripto") {
-            return cotacoesAtuaisCripto([$simbolo])[$simbolo] ?? null;
-        }
-    } catch (Throwable $erro) {
-        error_log("Cotação de referência indisponível para $simbolo: " . $erro->getMessage());
+    if (in_array($categoria, CATEGORIAS_COM_COTACAO_DE_MERCADO, true) && simboloNegociadoNaB3($simbolo)) {
+        $endpoint = "quote/" . $simbolo;
+    } elseif ($categoria === "Cripto" && criptoSimboloValido($simbolo)) {
+        $endpoint = "v2/crypto";
+        $query = ["coin" => $simbolo, "currency" => CRIPTO_MOEDA];
     }
 
-    return null;
+    if ($endpoint === null) {
+        return ["existe" => null, "preco" => null];
+    }
+
+    try {
+        $resposta = brapiRequest($endpoint, $query);
+
+        if (!$resposta["ok"]) {
+            $naoEncontrado = in_array((int) $resposta["status"], [400, 404], true);
+            return ["existe" => $naoEncontrado ? false : null, "preco" => null];
+        }
+
+        $json = json_decode((string) $resposta["body"], true);
+        $item = $json["results"][0] ?? $json["coins"][0] ?? null;
+        $preco = is_array($item) ? precoDoItemBrapi($item) : null;
+
+        return ["existe" => $preco !== null ? true : null, "preco" => $preco];
+    } catch (Throwable $erro) {
+        error_log("Cotação de referência indisponível para $simbolo: " . $erro->getMessage());
+        return ["existe" => null, "preco" => null];
+    }
 }
 
 /** Valida uma compra, venda ou dividendo de renda variável. Lança AporteValidacaoException com a mensagem para o usuário. */
@@ -112,11 +136,21 @@ function validarOperacaoRendaVariavel(string $tipo, string $recorrencia, string 
         throw new AporteValidacaoException("Informe uma quantidade maior que zero.");
     }
 
+    if (in_array($categoria, ["Ações", "FIIs"], true) && !simboloNegociadoNaB3($simbolo)) {
+        throw new AporteValidacaoException("Use o código do ativo na B3, por exemplo PETR4 ou MXRF11.");
+    }
+
     if ($tipo === "Dividendo" || $quantidade === null) {
         return;
     }
 
-    $cotacao = cotacaoDeReferencia($categoria, $simbolo);
+    $referencia = cotacaoDeReferencia($categoria, $simbolo);
+
+    if ($referencia["existe"] === false) {
+        throw new AporteValidacaoException("Não encontramos o ativo $simbolo no mercado. Confira o código.");
+    }
+
+    $cotacao = $referencia["preco"];
     $precoOperacao = $valor / $quantidade;
 
     if ($cotacao !== null && abs($precoOperacao - $cotacao) > $cotacao * TOLERANCIA_PRECO_OPERACAO) {
