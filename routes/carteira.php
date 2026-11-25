@@ -14,6 +14,14 @@ switch ($acao) {
         buscarCarteiras();
         break;
 
+    case 'resumo':
+        resumoPatrimonio();
+        break;
+
+    case 'depositar-simulacao':
+        depositarSimulacaoController();
+        break;
+
     case 'buscar-posicoes':
         itemInvestimento();
         break;

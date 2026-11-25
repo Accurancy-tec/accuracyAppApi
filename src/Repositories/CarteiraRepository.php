@@ -1,6 +1,5 @@
 <?php
-// Confere se a carteira pertence mesmo ao usuário autenticado,
-// pra ninguém criar aporte recorrente em carteira de outra pessoa
+
 function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteira, $estilo_carteira, $meta_carteira)
 {
     $sql = "INSERT INTO carteira (id_usuario, nome_carteira, estilo_carteira, tipo_carteira, meta_carteira) VALUES (?, ?, ?, ?, ?) RETURNING id_carteira";
@@ -17,6 +16,8 @@ function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteir
     return $nova["id_carteira"];
 }
 
+// Confere se a carteira pertence mesmo ao usuário autenticado,
+// pra ninguém operar em carteira de outra pessoa
 function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
 {
     $sql = "SELECT id_carteira FROM carteira WHERE id_carteira = ? AND id_usuario = ?";
@@ -26,90 +27,68 @@ function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
     return $stmt->fetch(PDO::FETCH_ASSOC) !== false;
 }
 
-function getCarteirasDoUsuario(PDO $conexao, $id_usuario)
+function buscarCarteiraDoUsuario(PDO $conexao, int $idCarteira, int $idUsuario): ?array
 {
-    $sql = "
-            SELECT
-                c.id_carteira,
-                c.nome_carteira,
-                c.tipo_carteira,
-                c.estilo_carteira,
-                c.meta_carteira,
+    $stmt = $conexao->prepare("
+        SELECT id_carteira, nome_carteira, tipo_carteira::text AS tipo_carteira,
+               saldo_livre_carteira, capital_simulado_carteira
+        FROM carteira
+        WHERE id_carteira = :carteira AND id_usuario = :usuario
+    ");
+    $stmt->execute([":carteira" => $idCarteira, ":usuario" => $idUsuario]);
 
-                COALESCE(
-                    a.total_aportado,
-                    0
-                ) AS total_aportado
-
-            FROM carteira c
-
-            LEFT JOIN (
-                SELECT
-                    id_carteira,
-
-                    SUM(
-                        CASE
-                            WHEN tipo_aporte = 'Compra'
-                            THEN valor_aporte
-                            ELSE 0
-                        END
-                    ) AS total_aportado
-
-                FROM aporte
-
-                GROUP BY id_carteira
-
-            ) a ON a.id_carteira = c.id_carteira
-
-            WHERE c.id_usuario = :id_usuario
-
-            ORDER BY c.id_carteira DESC
-        ";
-
-    $stmt = $conexao->prepare($sql);
-
-    $stmt->execute([
-        ":id_usuario" => $id_usuario
-    ]);
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 }
 
-function buscarPosicoesAcoes(PDO $conexao, $idUsuario, $idCarteira)
+function contarPosicoesAbertas(PDO $conexao, int $idCarteira): int
 {
-    $sql = "
-        SELECT
-            c.id_carteira,
-            c.nome_carteira,
-            ii.id_ativo,
-            a.simbolo_ativo AS ticker,
-            ii.quantidade_item AS quantidade,
-            ii.preco_medio_item AS preco_medio
+    $stmt = $conexao->prepare("SELECT COUNT(*) FROM item_investimento WHERE id_carteira = ? AND quantidade_item > 0");
+    $stmt->execute([$idCarteira]);
 
-        FROM carteira c
+    return (int) $stmt->fetchColumn();
+}
 
-        INNER JOIN item_investimento ii
-            ON ii.id_carteira = c.id_carteira
+/** Registra um depósito fictício no histórico (id_carteira só para depósitos de simulação). */
+function registrarDeposito(PDO $conexao, int $idUsuario, ?int $idCarteira, float $valor, string $descricao): void
+{
+    $stmt = $conexao->prepare("
+        INSERT INTO transacao_saldo (id_usuario, id_carteira, tipo_transacao, valor, descricao)
+        VALUES (:usuario, :carteira, 'Deposito', :valor, :descricao)
+    ");
+    $stmt->bindValue(":usuario", $idUsuario, PDO::PARAM_INT);
+    $stmt->bindValue(":carteira", $idCarteira, $idCarteira === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+    $stmt->bindValue(":valor", number_format($valor, 2, ".", ""));
+    $stmt->bindValue(":descricao", $descricao);
+    $stmt->execute();
+}
 
-        INNER JOIN ativo a
-            ON a.id_ativo = ii.id_ativo
-
-        WHERE c.id_usuario = :id_usuario
-          AND ii.id_carteira = :id_carteira
-          AND a.categoria_ativo = 'Ações'
-          AND ii.quantidade_item > 0
-
-        ORDER BY c.id_carteira, a.simbolo_ativo
-    ";
-
-    $stmt = $conexao->prepare($sql);
-
+/** Soma dinheiro fictício ao saldo e ao capital de uma carteira simulada. Devolve o novo saldo. */
+function depositarNaCarteiraSimulada(PDO $conexao, int $idUsuario, int $idCarteira, float $valor, string $descricao): string
+{
+    $stmt = $conexao->prepare("
+        UPDATE carteira
+           SET saldo_livre_carteira = saldo_livre_carteira + CAST(:valor AS NUMERIC),
+               capital_simulado_carteira = capital_simulado_carteira + CAST(:valor AS NUMERIC)
+         WHERE id_carteira = :carteira
+           AND id_usuario = :usuario
+           AND tipo_carteira = 'Simulada'
+        RETURNING saldo_livre_carteira
+    ");
     $stmt->execute([
-        ':id_usuario' => $idUsuario,
-        ':id_carteira' => $idCarteira
+        ":valor" => number_format($valor, 2, ".", ""),
+        ":carteira" => $idCarteira,
+        ":usuario" => $idUsuario,
     ]);
 
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $saldo = $stmt->fetchColumn();
+
+    if ($saldo === false) {
+        throw new RuntimeException("Carteira simulada $idCarteira não encontrada para o usuário $idUsuario.");
+    }
+
+    registrarDeposito($conexao, $idUsuario, $idCarteira, $valor, $descricao);
+
+    return (string) $saldo;
 }
 
 function deletarCarteira(PDO $conexao, $id_usuario, $id_carteira) {

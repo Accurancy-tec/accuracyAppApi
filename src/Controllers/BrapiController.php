@@ -2,7 +2,6 @@
 
 require_once __DIR__ . "/../../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
-require_once __DIR__ . "/../Services/BrapiService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 
 /** Seconds a successful brapi response is reused (protects the free plan rate limit). */
@@ -1676,40 +1675,23 @@ function historicoFuturos(): void
         'took' => $body['took'] ?? null
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
+// GET /brapi/patrimonio-carteiras  (mantida para integrações antigas; o cálculo é o mesmo de /carteiras/resumo)
 function patrimonioCarteirasAcaoController(): void
 {
-
     global $conexao;
     header('Content-Type: application/json; charset=UTF-8');
 
     try {
-        $idUsuario = autenticar();
-        $resultado = getCarteirasDoUsuario($conexao, $idUsuario);
-        $idCarteira = $resultado['id_carteira'];
+        require_once __DIR__ . '/../Services/PatrimonioService.php';
 
-        $resultado = patrimonioCarteirasAcaoService(
-            $conexao,
-            $idUsuario,
-            $idCarteira,
-        );
-
-        // O status HTTP é usado pelo Controller,
-        // mas não será incluído no JSON.
-        $statusHttp = $resultado['http_status'] ?? 200;
-
-        unset($resultado['http_status']);
-
-        http_response_code($statusHttp);
+        $idUsuario = (int) autenticar();
 
         echo json_encode(
-            $resultado,
+            ['success' => true] + montarPatrimonioUsuario($conexao, $idUsuario),
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
     } catch (Throwable $erro) {
-        error_log(
-            'Erro em patrimonioCarteirasController: ' .
-                $erro->getMessage()
-        );
+        error_log('Erro em patrimonioCarteirasAcaoController: ' . $erro->getMessage());
 
         http_response_code(500);
 
