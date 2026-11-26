@@ -266,13 +266,35 @@ function buscarPosicaoAtivoUsuario(): void
         $precoMedioRaw = $linha['preco_medio'] ?? null;
         $precoMedio = $quantidade > 0 && is_numeric($precoMedioRaw) ? (float) $precoMedioRaw : null;
 
+        // Posição em cada carteira: a venda pergunta primeiro de qual carteira sai o ativo.
+        $porCarteira = $conexao->prepare("
+            SELECT c.id_carteira, c.nome_carteira, c.tipo_carteira::text AS tipo_carteira,
+                   ii.quantidade_item AS quantidade, ii.preco_medio_item AS preco_medio
+              FROM carteira c
+              JOIN item_investimento ii ON ii.id_carteira = c.id_carteira
+              JOIN ativo a ON a.id_ativo = ii.id_ativo
+             WHERE c.id_usuario = :id_usuario
+               AND UPPER(a.simbolo_ativo) = :symbol
+               AND ii.quantidade_item > 0
+             ORDER BY c.tipo_carteira, c.nome_carteira
+        ");
+        $porCarteira->execute([':id_usuario' => $idUsuario, ':symbol' => $symbol]);
+        $carteiras = array_map(static fn(array $c): array => [
+            'id_carteira' => (int) $c['id_carteira'],
+            'nome_carteira' => $c['nome_carteira'],
+            'tipo_carteira' => $c['tipo_carteira'],
+            'quantidade' => (float) $c['quantidade'],
+            'preco_medio' => (float) $c['preco_medio'],
+        ], $porCarteira->fetchAll(PDO::FETCH_ASSOC));
+
         responderCarteira(200, [
             'success' => true,
             'sucesso' => true,
             'symbol' => $symbol,
             'quantidade' => $quantidade,
             'precoMedio' => $precoMedio,
-            'hasPosition' => $quantidade > 0 && $precoMedio !== null
+            'hasPosition' => $quantidade > 0 && $precoMedio !== null,
+            'carteiras' => $carteiras
         ]);
     } catch (Throwable $erro) {
         error_log('Failed to retrieve asset position: ' . $erro->getMessage());
