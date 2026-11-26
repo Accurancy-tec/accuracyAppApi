@@ -99,9 +99,9 @@ class OAuthRepository
      */
     public function criarSessao(string $idUsuario, string $refreshTokenHash, string $plataforma, string $dispositivo): int
     {
-        require_once __DIR__ . '/../Services/SessaoService.php';
+        require_once __DIR__ . '/../Services/SessionService.php';
 
-        return \sessaoRegistrar($this->pdo, (int) $idUsuario, $refreshTokenHash, $plataforma, $dispositivo);
+        return \createSession($this->pdo, (int) $idUsuario, $refreshTokenHash, $plataforma, $dispositivo);
     }
 
     public function criarVinculo(string $idUsuario, string $provedor, string $idExterno, string $email): void

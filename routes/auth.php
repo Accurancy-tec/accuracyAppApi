@@ -4,6 +4,8 @@ require_once __DIR__ . '/../src/Controllers/AuthController.php';
 require_once __DIR__ . '/OAUTH.php'; // define loginGoogle() e loginLinkedin()
 require_once __DIR__ . '/../src/Controllers/AdminController.php';
 require_once __DIR__ . '/../src/Controllers/TermsController.php';
+require_once __DIR__ . '/../src/Controllers/SessionController.php';
+require_once __DIR__ . '/../src/Controllers/PasswordRecoveryController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -45,22 +47,22 @@ switch ($acao) {
         refresh();
         break;
     case 'recuperarSenha':
-        recuperarSenha();
+        forgotPasswordController();
         break;
     case 'redefinirSenha':
-        redefinirSenha();
+        resetPasswordController();
         break;
     case 'sessoes':
-        sessoesListar();
+        listSessionsController();
         break;
     case 'sessaoEncerrar':
-        sessaoEncerrarController();
+        endSessionController();
         break;
     case 'sessoesEncerrar':
-        sessoesEncerrarController();
+        endAllSessionsController();
         break;
     case 'sair':
-        sairDaConta();
+        logoutController();
         break;
 
     case 'termos':

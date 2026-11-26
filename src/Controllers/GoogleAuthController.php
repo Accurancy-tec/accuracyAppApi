@@ -67,7 +67,7 @@ class GoogleAuthController
             // refresh token (como no auth/login): sem ele o app perderia a sessão em 15 minutos.
             // O app Android chama com OkHttp; o resto é o site.
             require_once __DIR__ . '/../Middleware/Authentication.php';
-            require_once __DIR__ . '/../Services/SessaoService.php';
+            require_once __DIR__ . '/../Services/SessionService.php';
             $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
             $plataforma = stripos($userAgent, 'okhttp') !== false ? 'Android' : 'Site';
             $refreshToken = \criarRefreshToken();
@@ -75,7 +75,7 @@ class GoogleAuthController
                 (string) $usuario['id_usuario'],
                 \criarHashRefreshToken($refreshToken),
                 $plataforma,
-                \sessaoNomeDispositivo($input['dispositivo'] ?? null, $plataforma, $userAgent)
+                \sessionDeviceName($input['dispositivo'] ?? null, $plataforma, $userAgent)
             );
             $token = $this->gerarToken($usuario, $idSessao);
 
