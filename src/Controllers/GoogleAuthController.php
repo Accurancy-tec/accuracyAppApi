@@ -64,16 +64,20 @@ class GoogleAuthController
                 throw new \RuntimeException('Usuário não encontrado após o login.');
             }
 
-            $token = $this->gerarToken($usuario);
-
-            // refresh token (como no auth/login): sem ele o app perderia a sessão em 15 minutos
+            // refresh token (como no auth/login): sem ele o app perderia a sessão em 15 minutos.
+            // O app Android chama com OkHttp; o resto é o site.
             require_once __DIR__ . '/../Middleware/Authentication.php';
+            require_once __DIR__ . '/../Services/SessaoService.php';
+            $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+            $plataforma = stripos($userAgent, 'okhttp') !== false ? 'Android' : 'Site';
             $refreshToken = \criarRefreshToken();
-            $this->oauthRepo->criarSessao(
+            $idSessao = $this->oauthRepo->criarSessao(
                 (string) $usuario['id_usuario'],
                 \criarHashRefreshToken($refreshToken),
-                date('Y-m-d H:i:s', time() + (60 * 60 * 24 * 30))
+                $plataforma,
+                \sessaoNomeDispositivo($input['dispositivo'] ?? null, $plataforma, $userAgent)
             );
+            $token = $this->gerarToken($usuario, $idSessao);
 
         } catch (\Throwable $e) {
             error_log('Erro no login com Google: ' . $e->getMessage());
@@ -97,11 +101,11 @@ class GoogleAuthController
      * Mesmo JWT do auth/loginSite (criarToken está em Middleware/Authentication.php),
      * então o token do Google é idêntico ao do login normal.
      */
-    private function gerarToken(array $usuario): string
+    private function gerarToken(array $usuario, int $idSessao): string
     {
         require_once __DIR__ . '/../Middleware/Authentication.php';
 
-        return criarToken($usuario['id_usuario']);
+        return criarToken($usuario['id_usuario'], $idSessao);
     }
 
     private function responder(int $status, array $corpo): void

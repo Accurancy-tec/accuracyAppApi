@@ -89,7 +89,7 @@ function enviarCodigoBrevo($email, $codigo)
             "content-type: application/json",
             "api-key: " . $apiKey
         ],
-        CURLOPT_POSTFIELDS => json_encode($dados),
+        CURLOPT_POSTFIELDS => json_encode(emailComSandbox($dados)),
         CURLOPT_TIMEOUT => 30
     ]);
 
@@ -113,6 +113,19 @@ function enviarCodigoBrevo($email, $codigo)
 
     return true;
 }
+/**
+ * Com EMAIL_SANDBOX=1 (só em testes locais) o Brevo confere chave, remetente e conteúdo,
+ * mas não entrega a mensagem a ninguém.
+ */
+function emailComSandbox(array $mensagem): array
+{
+    $sandbox = $_ENV["EMAIL_SANDBOX"] ?? getenv("EMAIL_SANDBOX");
+    if ($sandbox === "1" || $sandbox === "true") {
+        $mensagem["headers"] = ["X-Sib-Sandbox" => "drop"];
+    }
+    return $mensagem;
+}
+
 function enviarEmailBrevo($destino, $assunto, $html)
 {
     $apiKey    = $_ENV["BREVO_API_KEY"]   ?? getenv("BREVO_API_KEY");
@@ -134,12 +147,12 @@ function enviarEmailBrevo($destino, $assunto, $html)
             "content-type: application/json",
             "api-key: " . $apiKey,
         ],
-        CURLOPT_POSTFIELDS     => json_encode([
+        CURLOPT_POSTFIELDS     => json_encode(emailComSandbox([
             "sender"      => ["name" => "Accuracy", "email" => $remetente],
             "to"          => [["email" => $destino]],
             "subject"     => $assunto,
             "htmlContent" => $html,
-        ]),
+        ])),
     ]);
 
     $resposta = curl_exec($ch);

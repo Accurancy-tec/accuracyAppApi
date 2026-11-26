@@ -93,13 +93,15 @@ class OAuthRepository
         )->execute([$idUsuario]);
     }
 
-    /** Sessão do app (mesma tabela do auth/login) para o refresh token do login com Google. */
-    public function criarSessao(string $idUsuario, string $refreshTokenHash, string $expiraEm): void
+    /**
+     * Sessão (mesma tabela do auth/login) para o refresh token do login com Google.
+     * Devolve o id da sessão, que vai no token de acesso.
+     */
+    public function criarSessao(string $idUsuario, string $refreshTokenHash, string $plataforma, string $dispositivo): int
     {
-        $this->pdo->prepare(
-            'INSERT INTO Sessao_Usuario (id_usuario, refresh_token_hash, dispositivo_sessao, expira_em)
-             VALUES (?, ?, ?, ?)'
-        )->execute([$idUsuario, $refreshTokenHash, 'Android Accuracy', $expiraEm]);
+        require_once __DIR__ . '/../Services/SessaoService.php';
+
+        return \sessaoRegistrar($this->pdo, (int) $idUsuario, $refreshTokenHash, $plataforma, $dispositivo);
     }
 
     public function criarVinculo(string $idUsuario, string $provedor, string $idExterno, string $email): void
