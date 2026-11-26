@@ -147,6 +147,7 @@ function getAportesRecorrentes(PDO $conexao)
         FROM aporte_recorrente
         WHERE ativo_flag_recorrente = TRUE
          AND proxima_execucao_recorrente <= CURRENT_DATE
+         AND id_carteira IN (SELECT id_carteira FROM carteira WHERE deleted_at IS NULL)
         ORDER BY proxima_execucao_recorrente
     ";
 

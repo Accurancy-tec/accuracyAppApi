@@ -20,7 +20,7 @@ function registrarCarteira(PDO $conexao, $idUsuario, $nomeCarteira, $tipoCarteir
 // pra ninguém operar em carteira de outra pessoa
 function carteiraPertenceAoUsuario(PDO $conexao, $idCarteira, $idUsuario)
 {
-    $sql = "SELECT id_carteira FROM carteira WHERE id_carteira = ? AND id_usuario = ?";
+    $sql = "SELECT id_carteira FROM carteira WHERE id_carteira = ? AND id_usuario = ? AND deleted_at IS NULL";
     $stmt = $conexao->prepare($sql);
     $stmt->execute([$idCarteira, $idUsuario]);
 
@@ -33,7 +33,7 @@ function buscarCarteiraDoUsuario(PDO $conexao, int $idCarteira, int $idUsuario):
         SELECT id_carteira, nome_carteira, tipo_carteira::text AS tipo_carteira,
                saldo_livre_carteira, capital_simulado_carteira
         FROM carteira
-        WHERE id_carteira = :carteira AND id_usuario = :usuario
+        WHERE id_carteira = :carteira AND id_usuario = :usuario AND deleted_at IS NULL
     ");
     $stmt->execute([":carteira" => $idCarteira, ":usuario" => $idUsuario]);
 
@@ -72,6 +72,7 @@ function depositarNaCarteiraSimulada(PDO $conexao, int $idUsuario, int $idCartei
          WHERE id_carteira = :carteira
            AND id_usuario = :usuario
            AND tipo_carteira = 'Simulada'
+           AND deleted_at IS NULL
         RETURNING saldo_livre_carteira
     ");
     $stmt->execute([
@@ -89,77 +90,6 @@ function depositarNaCarteiraSimulada(PDO $conexao, int $idUsuario, int $idCartei
     registrarDeposito($conexao, $idUsuario, $idCarteira, $valor, $descricao);
 
     return (string) $saldo;
-}
-
-function deletarCarteira(PDO $conexao, $id_usuario, $id_carteira) {
-
-    try {
-
-        // Inicia a transação
-        $conexao->beginTransaction();
-
-        // Verifica se a carteira pertence ao usuário
-        $sql = "SELECT id_carteira
-                FROM carteira
-                WHERE id_carteira = :id_carteira
-                AND id_usuario = :id_usuario";
-
-        $stmt = $conexao->prepare($sql);
-
-        $stmt->execute([
-            ':id_carteira' => $id_carteira,
-            ':id_usuario' => $id_usuario
-        ]);
-
-        if (!$stmt->fetch(PDO::FETCH_ASSOC)) {
-            throw new Exception("Carteira não encontrada.");
-        }
-
-        // Exclui os aportes
-        $sql = "DELETE FROM aporte
-                WHERE id_carteira = :id_carteira";
-
-        $stmt = $conexao->prepare($sql);
-
-        $stmt->execute([
-            ':id_carteira' => $id_carteira
-        ]);
-
-        // Exclui as posições dos investimentos
-        $sql = "DELETE FROM item_investimento
-                WHERE id_carteira = :id_carteira";
-
-        $stmt = $conexao->prepare($sql);
-
-        $stmt->execute([
-            ':id_carteira' => $id_carteira
-        ]);
-
-        // Exclui a carteira
-        $sql = "DELETE FROM carteira
-                WHERE id_carteira = :id_carteira
-                AND id_usuario = :id_usuario";
-
-        $stmt = $conexao->prepare($sql);
-
-        $stmt->execute([
-            ':id_carteira' => $id_carteira,
-            ':id_usuario' => $id_usuario
-        ]);
-
-        // Confirma todas as operações
-        $conexao->commit();
-
-        return true;
-
-    } catch (Exception $e) {
-
-        // Desfaz todas as operações caso ocorra algum erro
-        if ($conexao->inTransaction()) {
-            $conexao->rollBack();
-        }
-        throw $e;
-    }
 }
 
 /** Read-only: current balance of the user (the same column the balance trigger maintains). */

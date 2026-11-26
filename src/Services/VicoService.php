@@ -55,7 +55,7 @@ function evolucaoCarteira()
         if ($idCarteira !== null && $idCarteira > 0) {
             $confere = $conexao->prepare(
                 "SELECT tipo_carteira::text AS tipo, saldo_livre_carteira
-                 FROM carteira WHERE id_carteira = :carteira AND id_usuario = :usuario"
+                 FROM carteira WHERE id_carteira = :carteira AND id_usuario = :usuario AND deleted_at IS NULL"
             );
             $confere->execute([":carteira" => $idCarteira, ":usuario" => $idUsuario]);
             $carteira = $confere->fetch(PDO::FETCH_ASSOC);
