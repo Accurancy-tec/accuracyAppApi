@@ -5,6 +5,7 @@ require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/ValidacaoCadastroService.php";
 require_once __DIR__ . "/../Services/SessaoService.php";
+require_once __DIR__ . "/../Services/TermsService.php";
 
 function login()
 {
@@ -165,6 +166,10 @@ function registrarUsuario()
     }
 
     $idUsuario = $usuario['id_usuario'];
+
+    if (filter_var($dados['aceite_termos'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        acceptTerms($conexao, (int) $idUsuario);
+    }
 
     $codigo = str_pad(
         random_int(0, 999999),
