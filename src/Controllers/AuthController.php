@@ -4,6 +4,7 @@ require_once __DIR__ . "/../Services/AuthService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/ValidacaoCadastroService.php";
+require_once __DIR__ . "/../Services/SessaoService.php";
 
 function login()
 {
@@ -70,19 +71,16 @@ function login()
         exit;
     }
 
-    $accessToken = criarToken($usuario["id_usuario"]);
-
+    // Sessão de 30 dias ligada ao aparelho (o app envia o nome dele em "dispositivo").
     $refreshToken = criarRefreshToken();
-
-    $refreshTokenHash = criarHashRefreshToken($refreshToken);
-
-    $expiraEm = date(
-        "Y-m-d H:i:s",
-        time() + (60 * 60 * 24 * 30)
+    $idSessao = sessaoRegistrar(
+        $conexao,
+        (int) $usuario["id_usuario"],
+        criarHashRefreshToken($refreshToken),
+        "Android",
+        sessaoNomeDispositivo($dados["dispositivo"] ?? null, "Android")
     );
-
-
-    criarSessaoUsuarioService($conexao, $usuario, $refreshTokenHash, $expiraEm);
+    $accessToken = criarToken($usuario["id_usuario"], $idSessao);
 
     echo json_encode([
         "success" => true,
@@ -274,7 +272,9 @@ function refresh()
         exit;
     }
 
-    $novoAccessToken = criarToken($sessao["id_usuario"]);
+    // O token novo continua ligado à mesma sessão (aparelho) e o último uso é anotado.
+    sessaoAtiva($conexao, (int) $sessao["id_sessao"], (int) $sessao["id_usuario"]);
+    $novoAccessToken = criarToken($sessao["id_usuario"], (int) $sessao["id_sessao"]);
 
     echo json_encode([
         "success" => true,
@@ -349,28 +349,17 @@ function loginSite()
     }
 
 
-    // Gera um access token com validade de 15 minutos.
-    $accessToken = criarToken($usuario["id_usuario"]);
-
-    // Gera um refresh token criptograficamente aleatório.
+    // Refresh token aleatório (só o hash vai para o banco) numa sessão de 30 dias ligada ao
+    // navegador; o access token de 15 minutos carrega o id dessa sessão.
     $refreshToken = criarRefreshToken();
-
-    // Armazena somente o hash do refresh token no banco.
-    $refreshTokenHash = criarHashRefreshToken($refreshToken);
-
-    // Sessão válida por 30 dias.
-    $expiraEm = date(
-        "Y-m-d H:i:s",
-        time() + (60 * 60 * 24 * 30)
-    );
-
-    // Usa o Service já existente na API.
-    criarSessaoUsuarioService(
+    $idSessao = sessaoRegistrar(
         $conexao,
-        $usuario,
-        $refreshTokenHash,
-        $expiraEm
+        (int) $usuario["id_usuario"],
+        criarHashRefreshToken($refreshToken),
+        "Site",
+        sessaoNomeDispositivo($dados["dispositivo"] ?? null, "Site", (string) ($_SERVER["HTTP_USER_AGENT"] ?? ""))
     );
+    $accessToken = criarToken($usuario["id_usuario"], $idSessao);
 
     // Retorna os dois tokens para o site.
     echo json_encode([
@@ -1094,4 +1083,155 @@ function perfilAutorizarTrocaEmail()
         "success" => true,
         "message" => "Mudança autorizada! Código enviado ao novo e-mail."
     ]);
+}
+
+// ---------------------------------------------------------------- aparelhos conectados
+
+// POST /auth/sessoes  -> aparelhos com login aberto ("atual" marca este aparelho)
+function sessoesListar()
+{
+    global $conexao;
+    $id = (int) autenticar();
+    $atual = $GLOBALS["sessao_atual"] ?? null;
+
+    $sessoes = array_map(static function (array $s) use ($atual): array {
+        $s["atual"] = $atual !== null && $s["id_sessao"] === (int) $atual;
+        return $s;
+    }, sessaoListarAtivas($conexao, $id));
+    // Este aparelho primeiro; os outros seguem do uso mais recente para o mais antigo.
+    usort($sessoes, static fn(array $a, array $b): int => (int) $b["atual"] <=> (int) $a["atual"]);
+
+    perfilResponder(200, ["success" => true, "sessoes" => $sessoes]);
+}
+
+// POST /auth/sessaoEncerrar  {id_sessao}  -> desconecta um aparelho
+function sessaoEncerrarController()
+{
+    global $conexao;
+    $id = (int) autenticar();
+    $idSessao = filter_var(perfilEntrada()["id_sessao"] ?? null, FILTER_VALIDATE_INT);
+
+    if (!$idSessao || $idSessao <= 0) {
+        perfilResponder(400, ["success" => false, "message" => "Informe o aparelho que será desconectado."]);
+    }
+    if (!sessaoEncerrar($conexao, $id, $idSessao)) {
+        perfilResponder(404, ["success" => false, "message" => "Esse aparelho já estava desconectado."]);
+    }
+
+    $atual = $GLOBALS["sessao_atual"] ?? null;
+    perfilResponder(200, [
+        "success" => true,
+        "message" => "Aparelho desconectado.",
+        "encerrou_atual" => $atual !== null && (int) $atual === $idSessao
+    ]);
+}
+
+// POST /auth/sessoesEncerrar  {manter_atual: true|false}  -> desconecta todos (ou todos os outros)
+function sessoesEncerrarController()
+{
+    global $conexao;
+    $id = (int) autenticar();
+    $atual = $GLOBALS["sessao_atual"] ?? null;
+    $manterAtual = (perfilEntrada()["manter_atual"] ?? true) !== false;
+
+    $encerradas = sessaoEncerrarTodas($conexao, $id, $manterAtual && $atual !== null ? (int) $atual : null);
+
+    perfilResponder(200, [
+        "success" => true,
+        "message" => $manterAtual ? "Os outros aparelhos foram desconectados." : "Todos os aparelhos foram desconectados.",
+        "encerradas" => $encerradas,
+        "encerrou_atual" => !$manterAtual || $atual === null
+    ]);
+}
+
+// POST /auth/sair  {refresh_token}  -> logout: encerra a sessão deste aparelho no servidor.
+// Usa o refresh token (não o de acesso) para funcionar mesmo depois que o acesso venceu;
+// a resposta é sempre a mesma, então não revela se o token existia.
+function sairDaConta()
+{
+    global $conexao;
+    $refreshToken = trim((string) (perfilEntrada()["refresh_token"] ?? ""));
+
+    if ($refreshToken !== "") {
+        sessaoEncerrarPorRefreshToken($conexao, criarHashRefreshToken($refreshToken));
+    }
+
+    perfilResponder(200, ["success" => true, "message" => "Você saiu da conta neste aparelho."]);
+}
+
+// ---------------------------------------------------------------- esqueci a senha
+
+const RECUPERAR_SENHA_TIPO = "recuperar_senha";
+
+// POST /auth/recuperarSenha  {email_usuario}  -> envia um código de 6 números
+// A resposta é a mesma exista ou não a conta, para não revelar quais e-mails estão cadastrados.
+function recuperarSenha()
+{
+    global $conexao;
+    $email = mb_strtolower(trim((string) (perfilEntrada()["email_usuario"] ?? "")), "UTF-8");
+
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        perfilResponder(400, ["success" => false, "message" => "Informe um e-mail válido."]);
+    }
+
+    $resposta = ["success" => true, "message" => "Se houver uma conta com esse e-mail, enviamos um código de 6 números para ele."];
+    $usuario = findByEmailService($conexao, $email);
+    if (!$usuario) {
+        perfilResponder(200, $resposta);
+    }
+
+    $id = (int) $usuario["id_usuario"];
+    $anterior = perfilBuscarToken($conexao, $id, RECUPERAR_SENHA_TIPO);
+    if ($anterior && (float) $anterior["segundos"] < PERFIL_INTERVALO_REENVIO) {
+        perfilResponder(200, $resposta);
+    }
+
+    $codigo = perfilNovoCodigo();
+    perfilCriarToken($conexao, $id, RECUPERAR_SENHA_TIPO, password_hash($codigo, PASSWORD_DEFAULT));
+
+    if (!enviarEmailBrevo($email, "Recuperação de senha - Accuracy", perfilEmailCodigo("Recuperação de senha", $codigo))) {
+        // Sem e-mail, o código não serve: é cancelado para o próximo pedido tentar enviar de novo
+        // (senão o intervalo de reenvio responderia "enviamos" sem mandar nada).
+        $criado = perfilBuscarToken($conexao, $id, RECUPERAR_SENHA_TIPO);
+        if ($criado) {
+            perfilUsarToken($conexao, $criado["id_token"]);
+        }
+        perfilResponder(502, ["success" => false, "message" => "Não foi possível enviar o e-mail agora. Tente de novo em alguns minutos."]);
+    }
+
+    perfilResponder(200, $resposta);
+}
+
+// POST /auth/redefinirSenha  {email_usuario, codigo, nova_senha}
+// Troca a senha, confirma o e-mail (o código chegou nele) e desconecta todos os aparelhos.
+function redefinirSenha()
+{
+    global $conexao;
+    $dados = perfilEntrada();
+    $email = mb_strtolower(trim((string) ($dados["email_usuario"] ?? "")), "UTF-8");
+    $codigo = trim((string) ($dados["codigo"] ?? ""));
+    $novaSenha = (string) ($dados["nova_senha"] ?? "");
+
+    if (strlen($novaSenha) < PERFIL_SENHA_MIN) {
+        perfilResponder(400, ["success" => false, "message" => "A nova senha precisa ter pelo menos " . PERFIL_SENHA_MIN . " caracteres."]);
+    }
+    if (!preg_match("/^[0-9]{6}$/", $codigo)) {
+        perfilResponder(400, ["success" => false, "message" => "O código tem 6 números."]);
+    }
+
+    $usuario = filter_var($email, FILTER_VALIDATE_EMAIL) ? findByEmailService($conexao, $email) : null;
+    if (!$usuario) {
+        perfilResponder(400, ["success" => false, "message" => "Código expirado. Peça um novo."]);
+    }
+
+    $id = (int) $usuario["id_usuario"];
+    $token = perfilConferirCodigo($conexao, $id, RECUPERAR_SENHA_TIPO, $codigo);
+
+    perfilAtualizarSenha($conexao, $id, password_hash($novaSenha, PASSWORD_DEFAULT));
+    perfilUsarToken($conexao, $token["id_token"]);
+    $conexao->prepare("UPDATE usuario SET email_verificado_usuario = TRUE WHERE id_usuario = :id")
+        ->execute([":id" => $id]);
+    perfilRevogarSessoes($conexao, $id);
+
+    perfilResponder(200, ["success" => true, "message" => "Senha redefinida. Entre com a nova senha."]);
 }

@@ -49,6 +49,10 @@ switch (true) {
         require __DIR__ . '/../routes/noticias.php';
         break;
 
+    case $partes[0] === 'relatorios':
+        require __DIR__ . '/../routes/relatorios.php';
+        break;
+
     default:
 
         http_response_code(404);

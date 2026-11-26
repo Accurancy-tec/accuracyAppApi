@@ -43,6 +43,24 @@ switch ($acao) {
     case 'refresh':
         refresh();
         break;
+    case 'recuperarSenha':
+        recuperarSenha();
+        break;
+    case 'redefinirSenha':
+        redefinirSenha();
+        break;
+    case 'sessoes':
+        sessoesListar();
+        break;
+    case 'sessaoEncerrar':
+        sessaoEncerrarController();
+        break;
+    case 'sessoesEncerrar':
+        sessoesEncerrarController();
+        break;
+    case 'sair':
+        sairDaConta();
+        break;
 
     case 'verify-email':
         verifyEmail();
