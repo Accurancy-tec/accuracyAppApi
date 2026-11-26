@@ -1,7 +1,7 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 
-require "../database/conexao.php";
+require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
@@ -12,6 +12,8 @@ require_once __DIR__ . "/../Services/CotacaoService.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/AutomacaoController.php";
 require_once __DIR__ . "/../Repositories/AporteRepository.php";
+require_once __DIR__ . "/../Services/PatrimonioService.php";
+require_once __DIR__ . "/../Services/NotificacaoService.php";
 
 function buscarAportesDoUsuario()
 {
@@ -49,51 +51,183 @@ function buscarAportesDoUsuario()
     }
 }
 
+const TIPOS_APORTE = ["Compra", "Venda", "Dividendo"];
+const RECORRENCIAS_APORTE = ["Único", "Diário", "Semanal", "Mensal", "Anual"];
+const CATEGORIAS_ATIVO = ["Ações", "Cripto", "Renda Fixa", "FIIs", "Internacional", "Futuros"];
+
+// Diferença máxima aceita entre o preço da operação e a cotação atual (taxas e atraso da cotação).
+const TOLERANCIA_PRECO_OPERACAO = 0.15;
+
+function numeroPositivo($valor): ?float
+{
+    return is_numeric($valor) && is_finite((float) $valor) && (float) $valor > 0 ? (float) $valor : null;
+}
+
+/**
+ * Cotação atual usada para conferir o ativo e o preço enviados pelo cliente.
+ *
+ * Devolve ["existe" => bool|null, "preco" => float|null]. "existe" é false quando a
+ * brapi responde que o código não existe; null quando não deu para confirmar
+ * (provedor fora do ar, limite de consultas ou categoria sem cotação de mercado).
+ */
+function cotacaoDeReferencia(string $categoria, string $simbolo): array
+{
+    $endpoint = null;
+    $query = [];
+
+    if (in_array($categoria, CATEGORIAS_COM_COTACAO_DE_MERCADO, true) && simboloNegociadoNaB3($simbolo)) {
+        $endpoint = "quote/" . $simbolo;
+    } elseif ($categoria === "Cripto" && criptoSimboloValido($simbolo)) {
+        $endpoint = "v2/crypto";
+        $query = ["coin" => $simbolo, "currency" => CRIPTO_MOEDA];
+    }
+
+    if ($endpoint === null) {
+        return ["existe" => null, "preco" => null];
+    }
+
+    try {
+        $resposta = brapiRequest($endpoint, $query);
+
+        if (!$resposta["ok"]) {
+            $naoEncontrado = in_array((int) $resposta["status"], [400, 404], true);
+            return ["existe" => $naoEncontrado ? false : null, "preco" => null];
+        }
+
+        $json = json_decode((string) $resposta["body"], true);
+        $item = $json["results"][0] ?? $json["coins"][0] ?? null;
+        $preco = is_array($item) ? precoDoItemBrapi($item) : null;
+
+        return ["existe" => $preco !== null ? true : null, "preco" => $preco];
+    } catch (Throwable $erro) {
+        error_log("Cotação de referência indisponível para $simbolo: " . $erro->getMessage());
+        return ["existe" => null, "preco" => null];
+    }
+}
+
+/** Valida uma compra, venda ou dividendo de renda variável. Lança AporteValidacaoException com a mensagem para o usuário. */
+function validarOperacaoRendaVariavel(string $tipo, string $recorrencia, string $categoria, string $simbolo, ?float $quantidade, ?float $valor): void
+{
+    if (!in_array($tipo, TIPOS_APORTE, true)) {
+        throw new AporteValidacaoException("Tipo de operação inválido.");
+    }
+
+    if (!in_array($recorrencia, RECORRENCIAS_APORTE, true)) {
+        throw new AporteValidacaoException("Recorrência inválida.");
+    }
+
+    if ($recorrencia !== "Único" && $tipo !== "Compra") {
+        throw new AporteValidacaoException("Só compras podem ser recorrentes.");
+    }
+
+    if (!in_array($categoria, CATEGORIAS_ATIVO, true) || $categoria === CATEGORIA_RENDA_FIXA) {
+        throw new AporteValidacaoException("Categoria do ativo inválida.");
+    }
+
+    if ($simbolo === "" || !preg_match('/^[A-Z0-9.^_-]{1,15}$/', $simbolo)) {
+        throw new AporteValidacaoException("Código do ativo inválido.");
+    }
+
+    if ($valor === null) {
+        throw new AporteValidacaoException("Informe um valor maior que zero.");
+    }
+
+    if ($tipo !== "Dividendo" && $quantidade === null) {
+        throw new AporteValidacaoException("Informe uma quantidade maior que zero.");
+    }
+
+    if (in_array($categoria, ["Ações", "FIIs"], true) && !simboloNegociadoNaB3($simbolo)) {
+        throw new AporteValidacaoException("Use o código do ativo na B3, por exemplo PETR4 ou MXRF11.");
+    }
+
+    if ($tipo === "Dividendo" || $quantidade === null) {
+        return;
+    }
+
+    $referencia = cotacaoDeReferencia($categoria, $simbolo);
+
+    if ($referencia["existe"] === false) {
+        throw new AporteValidacaoException("Não encontramos o ativo $simbolo no mercado. Confira o código.");
+    }
+
+    $cotacao = $referencia["preco"];
+    $precoOperacao = $valor / $quantidade;
+
+    if ($cotacao !== null && abs($precoOperacao - $cotacao) > $cotacao * TOLERANCIA_PRECO_OPERACAO) {
+        throw new AporteValidacaoException(sprintf(
+            "O preço desta operação está muito diferente da cotação atual de %s (R$ %s). Atualize a tela e tente de novo.",
+            $simbolo,
+            number_format($cotacao, 2, ",", ".")
+        ));
+    }
+}
+
+/** Quantidade que a carteira possui do ativo (0 se nunca teve). */
+function quantidadeNaCarteira(PDO $conexao, int $idCarteira, string $simbolo): float
+{
+    $stmt = $conexao->prepare("
+        SELECT ii.quantidade_item
+        FROM item_investimento ii
+        INNER JOIN ativo a ON a.id_ativo = ii.id_ativo
+        WHERE ii.id_carteira = :carteira AND a.simbolo_ativo = :simbolo
+    ");
+    $stmt->execute([":carteira" => $idCarteira, ":simbolo" => $simbolo]);
+
+    return (float) ($stmt->fetchColumn() ?: 0);
+}
+
+/** Saldo que a carteira pode usar agora: o da simulação ou o saldo geral (carteira real). */
+function saldoDisponivelParaCarteira(PDO $conexao, int $idUsuario, int $idCarteira): float
+{
+    $carteira = buscarCarteiraDoUsuario($conexao, $idCarteira, $idUsuario);
+
+    if ($carteira && $carteira["tipo_carteira"] === "Simulada") {
+        return (float) $carteira["saldo_livre_carteira"];
+    }
+
+    return (float) (buscarSaldoRepository($conexao, $idUsuario) ?? 0);
+}
+
+// POST /aportes/registrar-aporte
 function fazerAporte()
 {
     global $conexao;
 
-    $idUsuario = autenticar();
-
+    $idUsuario = (int) autenticar();
     $dados = json_decode(file_get_contents("php://input"), true);
+    $dados = is_array($dados) ? $dados : [];
 
-    $simboloAtivo = $dados["ativo_aporte"] ?? null;
-    $idAtivo = $dados["id_ativo"] ?? null;
-    $nomeAtivo = $dados["name_ativo"] ?? null;
-    $categoriaAtivo = $dados["categoria_ativo"] ?? null;
-    $idWallet = $dados["id_carteira"] ?? null;
-    $typeContribution = $dados['tipo_aporte'] ?? null;
-    $contributionQuantity = $dados['quantidade_aporte'] ?? null;
-    $contributionAmount = $dados['valor_aporte'] ?? null;
-    $contributionRecurrence = $dados['recorrencia_aporte'] ?? null;
-    $contributionNotes = $dados['observacao_aporte'] ?? null;
+    $idWallet = filter_var($dados["id_carteira"] ?? null, FILTER_VALIDATE_INT);
+    $categoriaAtivo = (string) ($dados["categoria_ativo"] ?? "");
+    $simboloAtivo = strtoupper(trim((string) ($dados["ativo_aporte"] ?? "")));
+    $nomeAtivo = trim((string) ($dados["name_ativo"] ?? "")) ?: $simboloAtivo;
+    $typeContribution = (string) ($dados["tipo_aporte"] ?? "");
+    $contributionQuantity = numeroPositivo($dados["quantidade_aporte"] ?? null);
+    $contributionAmount = numeroPositivo($dados["valor_aporte"] ?? null);
+    $contributionRecurrence = (string) ($dados["recorrencia_aporte"] ?? "Único");
+    $contributionNotes = isset($dados["observacao_aporte"]) ? mb_substr(trim((string) $dados["observacao_aporte"]), 0, 255) : null;
     $contributionDate = dataHojeCron();
-    $unitPriceInformed = $dados['preco_unitario'] ?? null;
-    $isFixedIncome = $categoriaAtivo === CATEGORIA_RENDA_FIXA || isset($dados['id_titulo']);
+    $unitPriceInformed = $dados["preco_unitario"] ?? null;
+    $isFixedIncome = $categoriaAtivo === CATEGORIA_RENDA_FIXA || isset($dados["id_titulo"]);
     $fixedIncomeTitle = null;
 
-    // id_carteira é obrigatório: sem ele o aporte seria gravado sem carteira.
     if (!$idWallet) {
-        http_response_code(400);
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Informe a carteira do aporte."
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
+        responderAporte(400, ["sucesso" => false, "mensagem" => "Informe a carteira do aporte."]);
+        return;
     }
 
-    try {
-        if (!carteiraPertenceAoUsuarioService($conexao, $idWallet, $idUsuario)) {
-            http_response_code(403);
-            echo json_encode([
-                "sucesso" => false,
-                "mensagem" => "Carteira inválida."
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
+    $carteira = buscarCarteiraDoUsuario($conexao, $idWallet, $idUsuario);
 
-        // Renda fixa: simbolo, nome, valor e condicoes vem do cadastro do titulo (nunca do app).
+    if (!$carteira) {
+        responderAporte(403, ["sucesso" => false, "mensagem" => "Carteira inválida."]);
+        return;
+    }
+
+    $simulada = $carteira["tipo_carteira"] === "Simulada";
+
+    try {
         if ($isFixedIncome) {
+            // Renda fixa: símbolo, nome, valor e condições vêm do cadastro do título (nunca do app).
             $fixedIncome = prepararAporteRendaFixa($conexao, $dados, $contributionDate);
             $simboloAtivo = $fixedIncome["simbolo"];
             $nomeAtivo = $fixedIncome["nome"];
@@ -103,30 +237,50 @@ function fazerAporte()
             $contributionQuantity = $fixedIncome["quantidade"];
             $contributionAmount = $fixedIncome["valor"];
             $fixedIncomeTitle = $fixedIncome["titulo"];
+        } else {
+            validarOperacaoRendaVariavel(
+                $typeContribution,
+                $contributionRecurrence,
+                $categoriaAtivo,
+                $simboloAtivo,
+                $contributionQuantity,
+                $contributionAmount
+            );
+
+            $possui = quantidadeNaCarteira($conexao, $idWallet, $simboloAtivo);
+
+            if ($typeContribution === "Dividendo" && $possui <= 0) {
+                throw new AporteValidacaoException("Dividendos só podem ser registrados para ativos que a carteira possui.");
+            }
+
+            if ($typeContribution === "Venda" && $contributionQuantity > $possui + 1e-8) {
+                throw new AporteValidacaoException("Você não tem essa quantidade de $simboloAtivo nesta carteira.");
+            }
+
+            if ($typeContribution === "Dividendo") {
+                $contributionQuantity = 0.0;
+            }
         }
 
         $conexao->beginTransaction();
 
-        error_log("ID CARTEIRA RECEBIDO NO APORTE: " . ($dados["id_carteira"] ?? "NULL"));
         $idAtivo = buscarOuCriarAtivo($conexao, $simboloAtivo, $nomeAtivo, $categoriaAtivo);
 
         $aporteCriado = criarAporteService($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount, $contributionRecurrence, $contributionNotes, $contributionDate);
         $idAporteCriado = (int) ($aporteCriado[0]["id_aporte"] ?? 0);
 
-        $posicaoAtualizada = atualizarPosicao($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount);
-
-        if (!$posicaoAtualizada) {
-            throw new Exception("Quantidade Insuficiente para venda. A operação não pode ser concluída.");
+        if (!atualizarPosicao($conexao, $idWallet, $idAtivo, $typeContribution, $contributionQuantity, $contributionAmount)) {
+            throw new AporteValidacaoException("Você não tem essa quantidade de $simboloAtivo nesta carteira.");
         }
 
-        // Detalhes por tipo de investimento (tabelas fixed_income_/variable_income_contribution_details).
+        // Detalhes por tipo de investimento (fixed_income_/variable_income_contribution_details).
         if ($fixedIncomeTitle !== null) {
             if ($idAporteCriado <= 0) {
                 throw new RuntimeException("Id do aporte não retornado; detalhe de renda fixa não gravado.");
             }
             registrarDetalheRendaFixa($conexao, $idAporteCriado, $fixedIncomeTitle);
         } elseif ($idAporteCriado > 0) {
-            registrarDetalheRendaVariavel($conexao, $idAporteCriado, (string) $typeContribution, $contributionQuantity, $contributionAmount, $unitPriceInformed);
+            registrarDetalheRendaVariavel($conexao, $idAporteCriado, $typeContribution, $contributionQuantity, $contributionAmount, $unitPriceInformed);
         }
 
         if ($contributionRecurrence !== "Único" && $typeContribution === "Compra") {
@@ -143,52 +297,70 @@ function fazerAporte()
         }
 
         $conexao->commit();
-
-        echo json_encode([
-            "sucesso" => true,
-            "mensagem" => "Aporte cadastrado com sucesso"
-        ]);
     } catch (AporteValidacaoException $erro) {
-        // Validacao de negocio (mensagem ja segura para o usuario). HTTP 200 + sucesso=false,
-        // como no "Saldo insuficiente", para o app exibir o texto em vez de "Erro HTTP".
         if ($conexao->inTransaction()) {
             $conexao->rollBack();
         }
 
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => $erro->getMessage()
-        ], JSON_UNESCAPED_UNICODE);
+        // Regra de negócio: HTTP 200 + sucesso=false para o app e o site mostrarem a mensagem.
+        responderAporte(200, ["sucesso" => false, "mensagem" => $erro->getMessage()]);
+        return;
     } catch (Throwable $erro) {
         if ($conexao->inTransaction()) {
             $conexao->rollBack();
         }
 
-        // Registra os detalhes tecnicos no log do servidor, sem expo-los ao aplicativo.
-        $detalhesErro = sprintf(
+        error_log(sprintf(
             "AportesController::fazerAporte | classe=%s | codigo=%s | arquivo=%s:%d | mensagem=%s",
             get_class($erro),
             (string) $erro->getCode(),
             $erro->getFile(),
             $erro->getLine(),
             $erro->getMessage()
-        );
-        error_log($detalhesErro . PHP_EOL . $erro->getTraceAsString());
+        ));
 
-        // A excecao do PostgreSQL continua bloqueando a compra; apenas simplificamos o Toast.
+        // O bloqueio de saldo vem do trigger do banco; aqui só traduzimos a mensagem.
         if (stripos($erro->getMessage(), "saldo insuficiente") !== false) {
-            echo json_encode([
+            responderAporte(200, [
                 "sucesso" => false,
-                "mensagem" => "Saldo insuficiente"
-            ], JSON_UNESCAPED_UNICODE);
+                "mensagem" => $simulada ? "Saldo da simulação insuficiente" : "Saldo insuficiente"
+            ]);
             return;
         }
 
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Não foi possível concluir a operação. Tente novamente."
-        ], JSON_UNESCAPED_UNICODE);
+        responderAporte(200, ["sucesso" => false, "mensagem" => "Não foi possível concluir a operação. Tente novamente."]);
+        return;
     }
+
+    notificarOperacao(
+        $conexao,
+        $idUsuario,
+        $typeContribution,
+        ["simbolo" => $simboloAtivo, "nome" => $nomeAtivo, "categoria" => $categoriaAtivo],
+        (float) $contributionQuantity,
+        (float) $contributionAmount,
+        $carteira["nome_carteira"]
+    );
+
+    try {
+        $patrimonio = montarPatrimonioUsuario($conexao, $idUsuario, ["id_carteira" => $idWallet]);
+        verificarMetasAlcancadas($conexao, $idUsuario, $patrimonio["carteiras"]);
+    } catch (Throwable $erro) {
+        error_log("Meta não verificada após o aporte: " . $erro->getMessage());
+    }
+
+    responderAporte(200, [
+        "sucesso" => true,
+        "mensagem" => "Aporte cadastrado com sucesso",
+        "id_aporte" => $idAporteCriado,
+        "saldo_disponivel" => round(saldoDisponivelParaCarteira($conexao, $idUsuario, $idWallet), 2)
+    ]);
+}
+
+function responderAporte(int $status, array $corpo): void
+{
+    http_response_code($status);
+    echo json_encode($corpo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
 function aporteRecorrente()
@@ -446,64 +618,32 @@ function verifyAportesRecorrentes()
     }
 }
 
+// POST /aportes/excluir-aporte   corpo: { "id_aporte": 10 }
 function excluirAporte()
 {
-
     global $conexao;
 
+    $idUsuario = (int) autenticar();
+    $dados = json_decode(file_get_contents("php://input"), true);
+    $idAporte = filter_var($dados["id_aporte"] ?? null, FILTER_VALIDATE_INT);
+
+    if (!$idAporte) {
+        responderAporte(400, ["sucesso" => false, "mensagem" => "id_aporte é obrigatório"]);
+        return;
+    }
+
     try {
-
-        $idUsuario = autenticar();
-
-        $dados = json_decode(
-            file_get_contents("php://input"),
-            true
-        );
-
-        $idAporte = $dados["id_aporte"] ?? null;
-
-        if (!$idAporte) {
-
-            http_response_code(400);
-
-            echo json_encode([
-                "sucesso" => false,
-                "mensagem" => "id_aporte é obrigatório"
-            ]);
-
+        if (!excluirAporteService($conexao, $idAporte, $idUsuario)) {
+            responderAporte(404, ["sucesso" => false, "mensagem" => "Aporte não encontrado"]);
             return;
         }
 
-        $excluido = excluirAporteService(
-            $conexao,
-            $idAporte,
-            $idUsuario
-        );
-
-        if (!$excluido) {
-
-            http_response_code(404);
-
-            echo json_encode([
-                "sucesso" => false,
-                "mensagem" => "Aporte não encontrado"
-            ]);
-
-            return;
-        }
-
-        echo json_encode([
-            "sucesso" => true,
-            "mensagem" => "Aporte excluído com sucesso"
-        ]);
+        responderAporte(200, ["sucesso" => true, "mensagem" => "Aporte excluído e saldo ajustado"]);
+    } catch (AporteValidacaoException $erro) {
+        responderAporte(409, ["sucesso" => false, "mensagem" => $erro->getMessage()]);
     } catch (Throwable $erro) {
-
-        http_response_code(500);
-
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Erro ao excluir aporte: " . $erro->getMessage()
-        ]);
+        error_log("Erro ao excluir aporte: " . $erro->getMessage());
+        responderAporte(500, ["sucesso" => false, "mensagem" => "Não foi possível excluir o aporte agora."]);
     }
 }
 

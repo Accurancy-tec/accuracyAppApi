@@ -1,8 +1,4 @@
 <?php
-// Confere se a carteira pertence mesmo ao usuário autenticado,
-// pra ninguém criar aporte recorrente em carteira de outra pessoa
-
-use PhpParser\Node\Stmt\Switch_;
 
 require_once __DIR__ . '/DetalheAporteRepository.php';
 
@@ -177,29 +173,31 @@ function updateAporteRecorrente(PDO $conexao, $proximaExecucao, $idAporteRecorre
 
 }
 
+/**
+ * Exclui um aporte desfazendo o efeito dele:
+ *  - a posição do ativo é recalculada com as operações que sobraram;
+ *  - o dinheiro volta (compra) ou sai (venda/dividendo) do saldo de onde veio:
+ *    saldo geral nas carteiras reais, saldo da simulação nas simuladas.
+ *
+ * Bloqueia exclusões que deixariam a carteira inconsistente (compra já vendida,
+ * ou venda cujo dinheiro já foi gasto).
+ */
 function excluirAporteRepository(PDO $conexao, $idAporte, $idUsuario)
 {
     try {
-
         $conexao->beginTransaction();
 
-        // 1. Busca o aporte e confirma que ele pertence ao usuário
-        $sqlAporte = "
-            SELECT
-                a.id_aporte,
-                a.id_carteira,
-                a.id_ativo
+        $stmtAporte = $conexao->prepare("
+            SELECT a.id_aporte, a.id_carteira, a.id_ativo, a.valor_aporte,
+                   a.tipo_aporte::text AS tipo_aporte,
+                   c.tipo_carteira::text AS tipo_carteira
             FROM aporte a
-            INNER JOIN carteira c
-                ON c.id_carteira = a.id_carteira
+            INNER JOIN carteira c ON c.id_carteira = a.id_carteira
             WHERE a.id_aporte = ?
               AND c.id_usuario = ?
-            FOR UPDATE
-        ";
-
-        $stmtAporte = $conexao->prepare($sqlAporte);
+            FOR UPDATE OF a, c
+        ");
         $stmtAporte->execute([$idAporte, $idUsuario]);
-
         $aporte = $stmtAporte->fetch(PDO::FETCH_ASSOC);
 
         if (!$aporte) {
@@ -210,29 +208,31 @@ function excluirAporteRepository(PDO $conexao, $idAporte, $idUsuario)
         $idCarteira = (int) $aporte["id_carteira"];
         $idAtivo = (int) $aporte["id_ativo"];
 
-        // 2. Exclui o aporte
-        $sqlDelete = "
-            DELETE FROM aporte
-            WHERE id_aporte = ?
-        ";
+        $restantes = operacoesDoAtivoNaCarteira($conexao, $idCarteira, $idAtivo, (int) $aporte["id_aporte"]);
 
-        $stmtDelete = $conexao->prepare($sqlDelete);
-        $stmtDelete->execute([$idAporte]);
+        if (calcularPosicaoPorOperacoes($restantes) === null) {
+            throw new AporteValidacaoException(
+                "Esta compra já foi vendida (total ou parcialmente). Exclua primeiro as vendas deste ativo."
+            );
+        }
 
-        // 3. Recalcula a posição desse ativo nessa carteira
-        recalcularPosicaoAposExclusao(
+        estornarSaldoDoAporte(
             $conexao,
+            (int) $idUsuario,
             $idCarteira,
-            $idAtivo
+            $aporte["tipo_carteira"],
+            $aporte["tipo_aporte"],
+            (string) $aporte["valor_aporte"]
         );
 
-        // 4. Confirma tudo
+        $conexao->prepare("DELETE FROM aporte WHERE id_aporte = ?")->execute([$idAporte]);
+
+        recalcularPosicaoAposExclusao($conexao, $idCarteira, $idAtivo);
+
         $conexao->commit();
 
         return true;
-
     } catch (Throwable $erro) {
-
         if ($conexao->inTransaction()) {
             $conexao->rollBack();
         }
@@ -240,130 +240,111 @@ function excluirAporteRepository(PDO $conexao, $idAporte, $idUsuario)
         throw $erro;
     }
 }
-function recalcularPosicaoAposExclusao(PDO $conexao, $idCarteira, $idAtivo)
+
+/** Devolve ao saldo o valor de uma compra excluída, ou retira o valor de uma venda/dividendo excluído. */
+function estornarSaldoDoAporte(PDO $conexao, int $idUsuario, int $idCarteira, string $tipoCarteira, string $tipoAporte, string $valor): void
 {
-    /*
-     * Recalcula a posição usando todos os aportes que
-     * continuam cadastrados para essa carteira e ativo.
-     *
-     * Compra    -> aumenta quantidade e valor investido
-     * Venda     -> diminui quantidade
-     * Dividendo -> não altera quantidade
-     */
+    $compra = $tipoAporte === "Compra";
 
-    $sql = "
-        SELECT
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN tipo_aporte = 'Compra'
-                        THEN quantidade_aporte
-                        WHEN tipo_aporte = 'Venda'
-                        THEN -quantidade_aporte
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS quantidade,
-
-            COALESCE(
-                SUM(
-                    CASE
-                        WHEN tipo_aporte = 'Compra'
-                        THEN valor_aporte
-                        ELSE 0
-                    END
-                ),
-                0
-            ) AS valor_compras
-        FROM aporte
-        WHERE id_carteira = ?
-          AND id_ativo = ?
-    ";
-
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$idCarteira, $idAtivo]);
-
-    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    $quantidade = (float) ($resultado["quantidade"] ?? 0);
-    $valorCompras = (float) ($resultado["valor_compras"] ?? 0);
-
-    // Não pode existir posição negativa
-    if ($quantidade < 0) {
-        $quantidade = 0;
+    if ($tipoCarteira === "Simulada") {
+        $sql = $compra
+            ? "UPDATE carteira SET saldo_livre_carteira = saldo_livre_carteira + CAST(:valor AS NUMERIC)
+               WHERE id_carteira = :alvo"
+            : "UPDATE carteira SET saldo_livre_carteira = saldo_livre_carteira - CAST(:valor AS NUMERIC)
+               WHERE id_carteira = :alvo AND saldo_livre_carteira >= CAST(:valor AS NUMERIC)";
+        $alvo = $idCarteira;
+    } else {
+        $sql = $compra
+            ? "UPDATE usuario SET saldo = saldo + CAST(:valor AS NUMERIC) WHERE id_usuario = :alvo"
+            : "UPDATE usuario SET saldo = saldo - CAST(:valor AS NUMERIC)
+               WHERE id_usuario = :alvo AND saldo >= CAST(:valor AS NUMERIC)";
+        $alvo = $idUsuario;
     }
 
-    // Se não existe mais quantidade desse ativo,
-    // remove a posição da carteira.
-    if ($quantidade <= 0) {
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([":valor" => $valor, ":alvo" => $alvo]);
 
-        $sqlDeletePosicao = "
-            DELETE FROM item_investimento
-            WHERE id_carteira = ?
-              AND id_ativo = ?
-        ";
+    if ($stmt->rowCount() === 0) {
+        throw new AporteValidacaoException(
+            "Não há saldo suficiente para desfazer esta operação: o valor recebido já foi usado em outras compras."
+        );
+    }
+}
 
-        $stmtDeletePosicao = $conexao->prepare($sqlDeletePosicao);
-        $stmtDeletePosicao->execute([
-            $idCarteira,
-            $idAtivo
-        ]);
+/** Operações de um ativo na carteira em ordem cronológica (opcionalmente ignorando um aporte). */
+function operacoesDoAtivoNaCarteira(PDO $conexao, int $idCarteira, int $idAtivo, ?int $ignorarAporte = null): array
+{
+    $stmt = $conexao->prepare("
+        SELECT tipo_aporte::text AS tipo_aporte,
+               COALESCE(quantidade_aporte, 0) AS quantidade_aporte,
+               valor_aporte
+        FROM aporte
+        WHERE id_carteira = :carteira
+          AND id_ativo = :ativo
+          AND id_aporte <> :ignorar
+          AND status_aporte = 'Concluída'
+        ORDER BY data_aporte, id_aporte
+    ");
+    $stmt->execute([":carteira" => $idCarteira, ":ativo" => $idAtivo, ":ignorar" => $ignorarAporte ?? 0]);
 
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Refaz a posição a partir das operações: compras somam quantidade e custo (preço médio
+ * ponderado) e vendas tiram quantidade pelo preço médio. Devolve null se alguma venda
+ * ficar maior que a quantidade disponível naquele momento.
+ */
+function calcularPosicaoPorOperacoes(array $operacoes): ?array
+{
+    $quantidade = 0.0;
+    $custo = 0.0;
+
+    foreach ($operacoes as $operacao) {
+        $qtd = (float) $operacao["quantidade_aporte"];
+
+        if ($operacao["tipo_aporte"] === "Compra") {
+            $quantidade += $qtd;
+            $custo += (float) $operacao["valor_aporte"];
+        } elseif ($operacao["tipo_aporte"] === "Venda") {
+            if ($qtd > $quantidade + 1e-8) {
+                return null;
+            }
+
+            $precoMedio = $quantidade > 0 ? $custo / $quantidade : 0.0;
+            $quantidade -= $qtd;
+            $custo -= $qtd * $precoMedio;
+        }
+    }
+
+    $quantidade = max(0.0, round($quantidade, 8));
+
+    return [
+        "quantidade" => $quantidade,
+        "preco_medio" => $quantidade > 0 ? max(0.0, $custo) / $quantidade : 0.0,
+    ];
+}
+
+function recalcularPosicaoAposExclusao(PDO $conexao, $idCarteira, $idAtivo)
+{
+    $posicao = calcularPosicaoPorOperacoes(operacoesDoAtivoNaCarteira($conexao, (int) $idCarteira, (int) $idAtivo));
+
+    if ($posicao === null || $posicao["quantidade"] <= 0) {
+        $conexao->prepare("DELETE FROM item_investimento WHERE id_carteira = ? AND id_ativo = ?")
+            ->execute([$idCarteira, $idAtivo]);
         return;
     }
 
-    // Calcula novamente o preço médio das compras restantes
-    $precoMedio = $valorCompras / $quantidade;
-
-    // Atualiza a posição existente
-    $sqlUpdate = "
-        UPDATE item_investimento
-        SET
-            quantidade_item = ?,
-            preco_medio_item = ?,
+    $stmt = $conexao->prepare("
+        INSERT INTO item_investimento (id_carteira, id_ativo, quantidade_item, preco_medio_item, atualizado_em)
+        VALUES (?, ?, ?, ?, NOW())
+        ON CONFLICT (id_carteira, id_ativo)
+        DO UPDATE SET
+            quantidade_item = EXCLUDED.quantidade_item,
+            preco_medio_item = EXCLUDED.preco_medio_item,
             atualizado_em = NOW()
-        WHERE id_carteira = ?
-          AND id_ativo = ?
-    ";
-
-    $stmtUpdate = $conexao->prepare($sqlUpdate);
-    $stmtUpdate->execute([
-        $quantidade,
-        $precoMedio,
-        $idCarteira,
-        $idAtivo
-    ]);
-
-    // Caso por algum motivo a posição não exista,
-    // cria novamente a partir dos aportes restantes.
-    if ($stmtUpdate->rowCount() === 0) {
-
-        $sqlInsert = "
-            INSERT INTO item_investimento
-                (
-                    id_carteira,
-                    id_ativo,
-                    quantidade_item,
-                    preco_medio_item,
-                    atualizado_em
-                )
-            VALUES (?, ?, ?, ?, NOW())
-            ON CONFLICT (id_carteira, id_ativo)
-            DO UPDATE SET
-                quantidade_item = EXCLUDED.quantidade_item,
-                preco_medio_item = EXCLUDED.preco_medio_item,
-                atualizado_em = NOW()
-        ";
-
-        $stmtInsert = $conexao->prepare($sqlInsert);
-        $stmtInsert->execute([
-            $idCarteira,
-            $idAtivo,
-            $quantidade,
-            $precoMedio
-        ]);
-    }
+    ");
+    $stmt->execute([$idCarteira, $idAtivo, $posicao["quantidade"], round($posicao["preco_medio"], 4)]);
 }
 
 function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)

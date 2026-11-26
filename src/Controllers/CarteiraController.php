@@ -1,218 +1,220 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 
-require "../database/conexao.php";
+require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../../config/cors.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
 require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
-require_once __DIR__ . "/../Services/BrapiService.php";
+require_once __DIR__ . "/../Services/PatrimonioService.php";
+require_once __DIR__ . "/../Services/NotificacaoService.php";
 
+const TIPOS_CARTEIRA = ["Real", "Simulada"];
+const ESTILOS_CARTEIRA = ["Renda Fixa", "Renda Variavel", "Cripto", "Internacional", "Mista"];
+const VALOR_MAXIMO_DEPOSITO = 10000000;
+
+function responderCarteira(int $status, array $corpo): void
+{
+    http_response_code($status);
+    echo json_encode($corpo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function lerCorpoJson(): array
+{
+    $dados = json_decode(file_get_contents("php://input"), true);
+
+    return is_array($dados) ? $dados : [];
+}
+
+/** Valor monetário positivo com até 2 casas ("1500", "1500.5", 1500.55). Devolve null se inválido. */
+function valorMonetarioValido($valor): ?float
+{
+    $texto = trim((string) $valor);
+
+    if (!preg_match('/^\d{1,13}(\.\d{1,2})?$/', $texto)) {
+        return null;
+    }
+
+    $numero = (float) $texto;
+
+    return $numero > 0 && $numero <= VALOR_MAXIMO_DEPOSITO ? round($numero, 2) : null;
+}
+
+// POST /carteiras/criar-carteira
+// corpo: nome_carteira, tipo_carteira (Real|Simulada), estilo_carteira, meta_carteira,
+//        saldo_inicial (obrigatório na simulada: dinheiro fictício só dessa carteira)
 function criarCarteira()
 {
+    global $conexao;
+
+    $idUsuario = (int) autenticar();
+    $dados = lerCorpoJson();
+
+    $nome = preg_replace("/\s+/u", " ", trim((string) ($dados["nome_carteira"] ?? "")));
+    $tipo = (string) ($dados["tipo_carteira"] ?? "");
+    $estilo = (string) ($dados["estilo_carteira"] ?? "Renda Variavel");
+    $metaInformada = $dados["meta_carteira"] ?? 0;
+    $meta = is_numeric($metaInformada) ? round((float) $metaInformada, 2) : -1;
+
+    if ($nome === "" || mb_strlen($nome, "UTF-8") > 60) {
+        responderCarteira(400, ["success" => false, "message" => "Dê um nome de até 60 caracteres para a carteira."]);
+        return;
+    }
+
+    if (!in_array($tipo, TIPOS_CARTEIRA, true)) {
+        responderCarteira(400, ["success" => false, "message" => "Escolha se a carteira é real ou simulada."]);
+        return;
+    }
+
+    if (!in_array($estilo, ESTILOS_CARTEIRA, true)) {
+        responderCarteira(400, ["success" => false, "message" => "Estilo de carteira inválido."]);
+        return;
+    }
+
+    if ($meta < 0 || $meta > 1000000000) {
+        responderCarteira(400, ["success" => false, "message" => "Informe uma meta válida (ou deixe em branco)."]);
+        return;
+    }
+
+    $saldoInicial = null;
+    if ($tipo === "Simulada") {
+        $saldoInicial = valorMonetarioValido(
+            is_numeric($dados["saldo_inicial"] ?? null) ? number_format((float) $dados["saldo_inicial"], 2, ".", "") : ""
+        );
+
+        if ($saldoInicial === null) {
+            responderCarteira(400, [
+                "success" => false,
+                "message" => "Informe o saldo inicial da simulação (até R$ 10.000.000,00)."
+            ]);
+            return;
+        }
+    }
+
     try {
-        global $conexao;
+        $conexao->beginTransaction();
 
-        $dados = json_decode(file_get_contents("php://input"), true);
+        $idCarteira = criarCarteiraService($conexao, $idUsuario, $nome, $estilo, $meta, $tipo);
 
-        $idUser = autenticar();
-        $nameWallet = $dados['nome_carteira'];
-        $typeWallet = $dados['tipo_carteira'];
-        $walletStyle = $dados['estilo_carteira'];
-        $walletGoals = $dados['meta_carteira'];
+        if ($saldoInicial !== null) {
+            depositarNaCarteiraSimulada($conexao, $idUsuario, (int) $idCarteira, $saldoInicial, "Saldo inicial da simulação");
+        }
 
-        criarCarteiraService($conexao, $idUser, $nameWallet, $walletStyle, $walletGoals, $typeWallet);
+        $conexao->commit();
 
-        echo json_encode([
+        responderCarteira(200, [
             "success" => true,
-            "message" => "carteira cadastrado com sucesso"
+            "message" => $tipo === "Simulada" ? "Carteira simulada criada" : "Carteira criada com sucesso",
+            "id_carteira" => (int) $idCarteira
         ]);
-    } catch (PDOException $erro) {
-        echo json_encode([
-            "success" => false,
-            "message" => "Erro ao salvar: " . $erro->getMessage()
-        ]);
+    } catch (Throwable $erro) {
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+
+        error_log("Erro ao criar carteira: " . $erro->getMessage());
+        responderCarteira(500, ["success" => false, "message" => "Não foi possível criar a carteira agora."]);
     }
 }
 
+// GET /carteiras/buscar-carteiras
+// Lista as carteiras já com patrimônio, rentabilidade e posições calculados pela API.
 function buscarCarteiras()
 {
     global $conexao;
+    $idUsuario = (int) autenticar();
 
     try {
-        $id_usuario = autenticar();
+        $patrimonio = montarPatrimonioUsuario($conexao, $idUsuario);
 
-        $resultado = getCarteirasDoUsuarioService($conexao, $id_usuario);
-
-        // Sem carteiras: segue adiante e devolve success=true com a lista vazia
-        // (antes enviava dois JSONs seguidos, o que quebrava o site).
-        if (empty($resultado)) {
-            $resultado = [];
-        }
-
-        foreach ($resultado as &$resultados) {
-
-            $id_carteira = $resultados['id_carteira'];
-
-            // Puxando do brapiService
-            $patrimonio = patrimonioCarteirasAcaoService($conexao, $id_usuario, $id_carteira);
-
-            $resultados['total_investido'] = $patrimonio['resumo']['total_investido'] ?? 0;
-
-            $resultados['patrimonio_atual'] = $patrimonio['resumo']['patrimonio_atual'] ?? 0;
-
-            $resultados['lucro_prejuizo'] = $patrimonio['resumo']['lucro_prejuizo'] ?? 0;
-
-            $resultados['rentabilidade_percentual'] = $patrimonio['resumo']['rentabilidade_percentual'] ?? 0;
-        }
-
-        unset($resultados);
-
-        echo json_encode([
+        responderCarteira(200, [
             "success" => true,
-            "carteiras" => $resultado
+            "saldo_geral" => $patrimonio["saldo_geral"],
+            "carteiras" => $patrimonio["carteiras"]
         ]);
-    } catch (PDOException $e) {
-        echo json_encode([
-            "success" => false,
-            "message" => "Não foi possível buscar as carteiras" . $e->getMessage()
-        ]);
+    } catch (Throwable $erro) {
+        error_log("Erro ao buscar carteiras: " . $erro->getMessage());
+        responderCarteira(500, ["success" => false, "message" => "Não foi possível buscar as carteiras."]);
     }
 }
 
+// GET /carteiras/resumo[?id_carteira=]
+// Números do dashboard: saldo geral, patrimônio, rentabilidade, distribuição e carteiras.
+function resumoPatrimonio()
+{
+    global $conexao;
+    $idUsuario = (int) autenticar();
+
+    $idCarteira = isset($_GET["id_carteira"]) ? filter_var($_GET["id_carteira"], FILTER_VALIDATE_INT) : null;
+
+    if ($idCarteira === false || ($idCarteira !== null && !carteiraPertenceAoUsuarioService($conexao, $idCarteira, $idUsuario))) {
+        responderCarteira(404, ["success" => false, "message" => "Carteira não encontrada."]);
+        return;
+    }
+
+    try {
+        $patrimonio = montarPatrimonioUsuario($conexao, $idUsuario, ["id_carteira" => $idCarteira]);
+        verificarMetasAlcancadas($conexao, $idUsuario, $patrimonio["carteiras"]);
+
+        responderCarteira(200, ["success" => true] + $patrimonio);
+    } catch (Throwable $erro) {
+        error_log("Erro ao montar o resumo do patrimônio: " . $erro->getMessage());
+        responderCarteira(500, ["success" => false, "message" => "Não foi possível calcular o patrimônio agora."]);
+    }
+}
+
+// GET /carteiras/buscar-posicoes?id_carteira=
 function itemInvestimento()
 {
     global $conexao;
+    $idUsuario = (int) autenticar();
 
-    autenticar();
+    $idCarteira = filter_var($_GET["id_carteira"] ?? null, FILTER_VALIDATE_INT);
 
-    $idCarteira = $_GET['id_carteira'] ?? null;
-
-    if (!$idCarteira) {
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "ID da carteira não fornecido."
-        ]);
-        exit;
+    if (!$idCarteira || !carteiraPertenceAoUsuarioService($conexao, $idCarteira, $idUsuario)) {
+        responderCarteira(404, ["sucesso" => false, "mensagem" => "Carteira não encontrada."]);
+        return;
     }
 
     try {
-        $posicoes = buscarPosicoesService($conexao, $idCarteira);
-
-        echo json_encode([
+        responderCarteira(200, [
             "sucesso" => true,
-            "posicoes" => $posicoes
+            "posicoes" => buscarPosicoesService($conexao, $idCarteira)
         ]);
-    } catch (PDOException $erro) {
-        echo json_encode([
-            "sucesso" => false,
-            "mensagem" => "Erro ao buscar posições: " . $erro->getMessage()
-        ]);
+    } catch (Throwable $erro) {
+        error_log("Erro ao buscar posições: " . $erro->getMessage());
+        responderCarteira(500, ["sucesso" => false, "mensagem" => "Erro ao buscar posições."]);
     }
 }
 
+// GET /carteiras/distribuicao[?id_carteira=]
+// Sem carteira: distribuição das carteiras reais (as simuladas ficam fora do patrimônio).
 function distribuicaoCarteira()
 {
     global $conexao;
+    $idUsuario = (int) autenticar();
+
+    $idCarteira = isset($_GET["id_carteira"]) ? filter_var($_GET["id_carteira"], FILTER_VALIDATE_INT) : null;
+
+    if ($idCarteira === false || ($idCarteira !== null && !carteiraPertenceAoUsuarioService($conexao, $idCarteira, $idUsuario))) {
+        responderCarteira(403, ["sucesso" => false, "mensagem" => "A carteira não pertence ao usuário", "distribuicao" => []]);
+        return;
+    }
 
     try {
-        $idUsuario = autenticar();
+        $patrimonio = montarPatrimonioUsuario($conexao, $idUsuario, ["id_carteira" => $idCarteira]);
+        $distribuicao = $patrimonio["distribuicao"];
 
-        $idCarteira = isset($_GET["id_carteira"])
-            ? (int) $_GET["id_carteira"]
-            : null;
-
-        $condicaoCarteira = "";
-        $parametros = [":usuario" => $idUsuario];
-
-        if ($idCarteira !== null && $idCarteira > 0) {
-            $confere = $conexao->prepare(
-                "SELECT 1
-                 FROM carteira
-                 WHERE id_carteira = :carteira
-                   AND id_usuario = :usuario
-                 LIMIT 1"
-            );
-            $confere->execute([
-                ":carteira" => $idCarteira,
-                ":usuario" => $idUsuario
-            ]);
-
-            if (!$confere->fetchColumn()) {
-                http_response_code(403);
-                echo json_encode([
-                    "sucesso" => false,
-                    "mensagem" => "A carteira não pertence ao usuário"
-                ]);
-                return;
-            }
-
-            $condicaoCarteira = "AND i.id_carteira = :carteira";
-            $parametros[":carteira"] = $idCarteira;
-        }
-
-        $sql = "
-            SELECT
-                a.categoria_ativo AS categoria,
-                SUM(i.quantidade_item * COALESCE(cot.preco, i.preco_medio_item)) AS valor
-            FROM item_investimento i
-            INNER JOIN carteira c
-                ON c.id_carteira = i.id_carteira
-            INNER JOIN ativo a
-                ON a.id_ativo = i.id_ativo
-            -- LEFT: ativo sem cotação (Cripto, Renda Fixa, Internacional) não pode
-            -- sumir do donut; nesse caso vale o preço médio pago.
-            LEFT JOIN LATERAL (
-                SELECT
-                    cota.preco_fechamento_cotacao AS preco
-                FROM cotacao_ativo cota
-                WHERE cota.id_ativo = i.id_ativo
-                ORDER BY cota.data_cotacao DESC
-                LIMIT 1
-            ) cot ON TRUE
-            WHERE c.id_usuario = :usuario
-              AND i.quantidade_item > 0
-              $condicaoCarteira
-            GROUP BY a.categoria_ativo
-            HAVING SUM(i.quantidade_item * COALESCE(cot.preco, i.preco_medio_item)) > 0
-            ORDER BY valor DESC
-        ";
-
-        $consulta = $conexao->prepare($sql);
-        $consulta->execute($parametros);
-
-        $linhas = $consulta->fetchAll(PDO::FETCH_ASSOC);
-        $total = 0.0;
-
-        foreach ($linhas as $linha) {
-            $total += (float) $linha["valor"];
-        }
-
-        $distribuicao = [];
-
-        foreach ($linhas as $linha) {
-            $valor = (float) $linha["valor"];
-
-            $distribuicao[] = [
-                "categoria" => $linha["categoria"],
-                "valor" => $valor,
-                "percentual" => $total > 0
-                    ? round(($valor / $total) * 100, 2)
-                    : 0.0
-            ];
-        }
-
-        echo json_encode([
+        responderCarteira(200, [
             "sucesso" => true,
             "distribuicao" => $distribuicao,
-            "total" => $total
+            "total" => round(array_sum(array_column($distribuicao, "valor")), 2)
         ]);
     } catch (Throwable $erro) {
-        http_response_code(500);
-
-        echo json_encode([
+        error_log("Erro ao gerar distribuição: " . $erro->getMessage());
+        responderCarteira(500, [
             "sucesso" => false,
-            "mensagem" => "Erro ao gerar distribuição da carteira: " . $erro->getMessage(),
+            "mensagem" => "Erro ao gerar distribuição da carteira.",
             "distribuicao" => []
         ]);
     }
@@ -222,21 +224,16 @@ function buscarPosicaoAtivoUsuario(): void
 {
     global $conexao;
 
-    header('Content-Type: application/json; charset=UTF-8');
-
     try {
         $idUsuario = autenticar();
         $symbol = strtoupper(trim((string) ($_GET['symbol'] ?? '')));
 
         if ($symbol === '' || !preg_match('/^[A-Z0-9.^_-]{1,24}$/', $symbol)) {
-            http_response_code(400);
-
-            echo json_encode([
+            responderCarteira(400, [
                 'success' => false,
                 'sucesso' => false,
                 'mensagem' => 'Ticker ausente ou inválido.'
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
+            ]);
             return;
         }
 
@@ -265,85 +262,70 @@ function buscarPosicaoAtivoUsuario(): void
         ]);
 
         $linha = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $quantidade = max(
-            0.0,
-            (float) ($linha['quantidade'] ?? 0)
-        );
-
+        $quantidade = max(0.0, (float) ($linha['quantidade'] ?? 0));
         $precoMedioRaw = $linha['preco_medio'] ?? null;
+        $precoMedio = $quantidade > 0 && is_numeric($precoMedioRaw) ? (float) $precoMedioRaw : null;
 
-        $precoMedio = $quantidade > 0 && is_numeric($precoMedioRaw)
-            ? (float) $precoMedioRaw
-            : null;
-
-        echo json_encode([
+        responderCarteira(200, [
             'success' => true,
             'sucesso' => true,
             'symbol' => $symbol,
             'quantidade' => $quantidade,
             'precoMedio' => $precoMedio,
             'hasPosition' => $quantidade > 0 && $precoMedio !== null
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ]);
     } catch (Throwable $erro) {
-        error_log(
-            'Failed to retrieve asset position: ' . $erro->getMessage()
-        );
+        error_log('Failed to retrieve asset position: ' . $erro->getMessage());
 
-        http_response_code(500);
-
-        echo json_encode([
+        responderCarteira(500, [
             'success' => false,
             'sucesso' => false,
             'mensagem' => 'Não foi possível consultar a posição do ativo.'
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ]);
     }
 }
 
+// POST /carteiras/excluir-carteira?id_carteira=
+// Simulada: pode ser excluída a qualquer momento (o dinheiro dela é fictício e próprio).
+// Real: só sem ativos em aberto, para que nenhum valor investido desapareça do patrimônio.
 function excluirCarteira(): void
 {
     global $conexao;
+    $idUsuario = (int) autenticar();
 
-    $id_usuario = autenticar();
-    $id_carteira = $_GET['id_carteira'] ?? null;
+    $idCarteira = filter_var($_GET['id_carteira'] ?? null, FILTER_VALIDATE_INT);
 
-    if (!$id_carteira) {
-        echo json_encode([
-            'success' => false,
-            'message' => "ID da carteira não fornecido"
-        ]);
-        exit;
+    if (!$idCarteira) {
+        responderCarteira(400, ['success' => false, 'message' => "ID da carteira não fornecido"]);
+        return;
     }
 
     try {
+        $carteira = buscarCarteiraDoUsuario($conexao, $idCarteira, $idUsuario);
 
-        $resultado = deletarCarteiraService($conexao, $id_usuario, $id_carteira);
-
-        if (!$resultado) {
-            http_response_code(404);
-
-            echo json_encode([
-                'success' => false,
-                'message' => "Erro ao excluir a carteira"
-            ]);
-
+        if (!$carteira) {
+            responderCarteira(404, ['success' => false, 'message' => "Carteira não encontrada"]);
             return;
         }
 
-        echo json_encode([
-            'success' => true,
-            'message' => "Carteira exluida com sucesso"
-        ]);
-    } catch (Throwable $error) {
-        http_response_code(500);
+        if ($carteira['tipo_carteira'] === 'Real' && contarPosicoesAbertas($conexao, $idCarteira) > 0) {
+            responderCarteira(409, [
+                'success' => false,
+                'message' => "Venda os ativos desta carteira antes de excluí-la."
+            ]);
+            return;
+        }
 
-        echo json_encode([
-            'success' => false,
-            'message' => "Não foi possível conectar com o banco " . $error->getMessage()
-        ]);
+        deletarCarteiraService($conexao, $idUsuario, $idCarteira);
+
+        responderCarteira(200, ['success' => true, 'message' => "Carteira excluída com sucesso"]);
+    } catch (Throwable $error) {
+        error_log("Erro ao excluir carteira: " . $error->getMessage());
+        responderCarteira(500, ['success' => false, 'message' => "Não foi possível excluir a carteira agora."]);
     }
 }
 
+// GET /carteiras/saldo
 function buscarSaldoController()
 {
     global $conexao;
@@ -353,69 +335,107 @@ function buscarSaldoController()
         $saldo = buscarSaldoRepository($conexao, $id_usuario);
 
         if ($saldo === null) {
-            http_response_code(404);
-            echo json_encode(['success' => false, 'message' => 'Usuário não encontrado'], JSON_UNESCAPED_UNICODE);
+            responderCarteira(404, ['success' => false, 'message' => 'Usuário não encontrado']);
             return;
         }
 
-        http_response_code(200);
-        echo json_encode(['success' => true, 'saldo_atual' => $saldo], JSON_UNESCAPED_UNICODE);
+        responderCarteira(200, ['success' => true, 'saldo_atual' => $saldo]);
     } catch (Throwable $e) {
         error_log('Erro ao buscar o saldo: ' . $e->getMessage());
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Erro ao consultar o saldo'], JSON_UNESCAPED_UNICODE);
+        responderCarteira(500, ['success' => false, 'message' => 'Erro ao consultar o saldo']);
     }
 }
 
+// POST|GET /carteiras/adicionar-saldo?valor=500.00   (depósito fictício no saldo geral)
 function adicionarSaldoController()
 {
     global $conexao;
 
     try {
+        $idUsuario = (int) autenticar();
+        $valor = valorMonetarioValido($_GET['valor'] ?? lerCorpoJson()['valor'] ?? null);
 
-        $id_usuario = autenticar();
-
-        $valor = $_GET['valor'] ?? null;
-
-        //validacao do valor
-        if (!is_string($valor) || !preg_match('/^\d{1,13}(\.\d{1,2})?$/', $valor) || (float) $valor <= 0) {
-            http_response_code(400);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Valor de depósito inválido.'
-            ]);
+        if ($valor === null) {
+            responderCarteira(400, ['success' => false, 'message' => 'Valor de depósito inválido.']);
             return;
         }
 
-        //atualizar o saldo do usuario
-        $novoSaldo = adicionarSaldoService($conexao, $id_usuario, $valor);
+        $conexao->beginTransaction();
+        $novoSaldo = adicionarSaldoService($conexao, $idUsuario, number_format($valor, 2, ".", ""));
 
         if ($novoSaldo === null) {
-            http_response_code(404);
-
-            echo json_encode([
-                'success' => false,
-                'message' => 'Usuário não encontrado'
-            ]);
+            $conexao->rollBack();
+            responderCarteira(404, ['success' => false, 'message' => 'Usuário não encontrado']);
             return;
         }
 
-        http_response_code(200);
+        registrarDeposito($conexao, $idUsuario, null, $valor, "Depósito no saldo geral");
+        $conexao->commit();
 
-        echo json_encode([
+        notificarUsuario($conexao, $idUsuario, "Saldo adicionado", formatarReais($valor) . " foram adicionados ao seu saldo geral.", "Sistema");
+
+        responderCarteira(200, [
             'success' => true,
             'message' => 'Saldo adicionado com sucesso',
             'saldo_atual' => $novoSaldo
         ]);
     } catch (Throwable $e) {
-        error_log('Error ao adicionar o saldo:' . $e->getMessage());
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+        error_log('Erro ao adicionar o saldo: ' . $e->getMessage());
+        responderCarteira(500, ['success' => false, 'message' => "Erro ao adicionar saldo"]);
+    }
+}
 
-        http_response_code(500);
+// POST /carteiras/depositar-simulacao   corpo: { "id_carteira": 7, "valor": 1000 }
+// Coloca mais dinheiro fictício em uma carteira simulada (não mexe no saldo geral).
+function depositarSimulacaoController()
+{
+    global $conexao;
+    $idUsuario = (int) autenticar();
 
-        echo json_encode([
-            'success' => false,
-            'message' => "Erro ao adicionar saldo"
+    if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+        responderCarteira(405, ["success" => false, "message" => "Use POST."]);
+        return;
+    }
+
+    $dados = lerCorpoJson();
+    $idCarteira = filter_var($dados["id_carteira"] ?? null, FILTER_VALIDATE_INT);
+    $valor = valorMonetarioValido(is_numeric($dados["valor"] ?? null) ? number_format((float) $dados["valor"], 2, ".", "") : "");
+
+    if (!$idCarteira || $valor === null) {
+        responderCarteira(400, ["success" => false, "message" => "Informe a carteira e um valor válido (até R$ 10.000.000,00)."]);
+        return;
+    }
+
+    try {
+        $carteira = buscarCarteiraDoUsuario($conexao, $idCarteira, $idUsuario);
+
+        if (!$carteira) {
+            responderCarteira(404, ["success" => false, "message" => "Carteira não encontrada."]);
+            return;
+        }
+
+        if ($carteira["tipo_carteira"] !== "Simulada") {
+            responderCarteira(400, ["success" => false, "message" => "Carteiras reais usam o saldo geral da conta."]);
+            return;
+        }
+
+        $conexao->beginTransaction();
+        $novoSaldo = depositarNaCarteiraSimulada($conexao, $idUsuario, $idCarteira, $valor, "Depósito na simulação");
+        $conexao->commit();
+
+        responderCarteira(200, [
+            "success" => true,
+            "message" => "Saldo da simulação atualizado",
+            "saldo_simulacao" => $novoSaldo
         ]);
+    } catch (Throwable $erro) {
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+        error_log("Erro ao depositar na simulação: " . $erro->getMessage());
+        responderCarteira(500, ["success" => false, "message" => "Não foi possível depositar agora."]);
     }
 }

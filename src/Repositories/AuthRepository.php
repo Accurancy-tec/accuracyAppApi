@@ -1,7 +1,7 @@
 <?php
 function loginUsuario(PDO $conexao, $email)
 {
-    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
+    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE LOWER(email_usuario) = LOWER(:email_usuario) LIMIT 1";
 
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(":email_usuario", $email);
@@ -86,7 +86,7 @@ function gerarTokenUsuario(PDO $conexao, $idUsuario, $codigoHash, $expiraEm)
 
 function loginUsuarioSite(PDO $conexao, $email)
 {
-    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email_usuario LIMIT 1";
+    $sql = "SELECT id_usuario, nome_usuario, email_usuario, senha_usuario, email_verificado_usuario FROM usuario WHERE LOWER(email_usuario) = LOWER(:email_usuario) LIMIT 1";
 
     $stmt = $conexao->prepare($sql);
     $stmt->bindParam(":email_usuario", $email);
@@ -97,7 +97,7 @@ function loginUsuarioSite(PDO $conexao, $email)
 
 function findByEmail(PDO $conexao, $email)
 {
-    $sql = "SELECT id_usuario, email_verificado_usuario FROM usuario WHERE email_usuario = :email LIMIT 1";
+    $sql = "SELECT id_usuario, email_verificado_usuario FROM usuario WHERE LOWER(email_usuario) = LOWER(:email) LIMIT 1";
     $stmt = $conexao->prepare($sql);
     $stmt->bindValue(
         ":email",
@@ -197,7 +197,7 @@ function verificarEmail(PDO $conexao, $idUsuario)
 function perfilBuscarUsuario(PDO $c, $id)
 {
     $st = $c->prepare("SELECT id_usuario, nome_usuario, email_usuario, foto_usuario,
-                              telefone_usuario, email_verificado_usuario
+                              telefone_usuario, cpf_usuario, email_verificado_usuario
                        FROM usuario WHERE id_usuario = :id LIMIT 1");
     $st->bindValue(":id", $id, PDO::PARAM_INT);
     $st->execute();

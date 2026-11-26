@@ -3,6 +3,7 @@ require_once __DIR__ . "/../../config/email.php";
 require_once __DIR__ . "/../Services/AuthService.php";
 require_once __DIR__ . "/../../database/conexao.php";
 require_once __DIR__ . "/../Middleware/Authentication.php";
+require_once __DIR__ . "/../Services/ValidacaoCadastroService.php";
 
 function login()
 {
@@ -96,6 +97,8 @@ function login()
     ]);
 }
 
+// POST /auth/registrarNovoUsuario
+// Obrigatórios: nome, e-mail e senha. Telefone e CPF são opcionais e só são validados se enviados.
 function registrarUsuario()
 {
     global $conexao;
@@ -105,27 +108,30 @@ function registrarUsuario()
         $dados = [];
     }
 
-    $nome = trim((string) ($dados['nome_usuario'] ?? ''));
-    $email = trim((string) ($dados['email_usuario'] ?? ''));
+    $nome = preg_replace("/\s+/u", " ", trim((string) ($dados['nome_usuario'] ?? '')));
+    $email = mb_strtolower(trim((string) ($dados['email_usuario'] ?? '')), "UTF-8");
     $senha = (string) ($dados['senha_usuario'] ?? '');
-    $telefone = trim((string) ($dados['telefone_usuario'] ?? ''));
-    // O CPF não é mais usado: continua aceito (o site antigo pode enviar), mas é opcional.
-    $cpf = trim((string) ($dados['cpf_usuario'] ?? ''));
-    $cpf = $cpf === '' ? null : $cpf;
+    $telefone = telefoneSomenteDigitos((string) ($dados['telefone_usuario'] ?? ''));
+    $cpf = preg_replace("/\D+/", "", (string) ($dados['cpf_usuario'] ?? ''));
 
-    if ($nome === '' || $email === '' || $senha === '' || $telefone === '') {
-        echo json_encode([
-            "status" => "erro",
-            "mensagem" => "Nome, e-mail, senha e telefone são obrigatórios."
-        ]);
-        exit;
+    $erro = null;
+
+    if ($nome === '' || $email === '' || $senha === '') {
+        $erro = "Nome, e-mail e senha são obrigatórios.";
+    } elseif (mb_strlen($nome, "UTF-8") < 2 || mb_strlen($nome, "UTF-8") > 100) {
+        $erro = "Informe um nome com 2 a 100 caracteres.";
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 120) {
+        $erro = "E-mail inválido.";
+    } elseif (strlen($senha) < PERFIL_SENHA_MIN) {
+        $erro = "A senha precisa ter pelo menos " . PERFIL_SENHA_MIN . " caracteres.";
+    } elseif ($telefone === null) {
+        $erro = "Telefone inválido. Use o DDD, por exemplo (11) 91234-5678, ou deixe em branco.";
+    } elseif ($cpf !== '' && !cpfValido($cpf)) {
+        $erro = "CPF inválido. Confira os números ou deixe o campo em branco.";
     }
 
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        echo json_encode([
-            "status" => "erro",
-            "mensagem" => "E-mail inválido."
-        ]);
+    if ($erro !== null) {
+        echo json_encode(["status" => "erro", "mensagem" => $erro]);
         exit;
     }
 
@@ -137,16 +143,16 @@ function registrarUsuario()
             $nome,
             $email,
             $senhaHash,
-            $cpf,
-            $telefone
+            $cpf === '' ? null : $cpf,
+            $telefone === '' ? null : $telefone
         );
     } catch (PDOException $erro) {
-        // 23505 = já existe uma conta com este e-mail/telefone
+        // 23505 = já existe uma conta com este e-mail, telefone ou CPF
         if ($erro->getCode() === '23505') {
             http_response_code(409);
             echo json_encode([
                 "status" => "erro",
-                "mensagem" => "Já existe uma conta com este e-mail ou telefone."
+                "mensagem" => "Já existe uma conta com este e-mail, telefone ou CPF."
             ]);
             exit;
         }
@@ -760,10 +766,19 @@ function perfilObter()
         perfilResponder(404, ["success" => false, "message" => "Usuário não encontrado."]);
     }
 
+    perfilResponder(200, ["success" => true, "user" => perfilParaResposta($conexao, $usuario, $id)]);
+}
+
+/** Dados do perfil como o site e o app exibem: telefone formatado e CPF mascarado. */
+function perfilParaResposta(PDO $conexao, array $usuario, $id): array
+{
     $usuario["email_verificado_usuario"] = perfilVerdadeiro($usuario["email_verificado_usuario"] ?? false);
     $usuario["google_vinculado"] = perfilGoogleVinculado($conexao, $id);
+    $usuario["telefone_formatado"] = formatarTelefone($usuario["telefone_usuario"] ?? null);
+    $usuario["cpf_mascarado"] = mascararCpf($usuario["cpf_usuario"] ?? null);
+    unset($usuario["cpf_usuario"]);
 
-    perfilResponder(200, ["success" => true, "user" => $usuario]);
+    return $usuario;
 }
 
 // POST /auth/googleConfig -> ID do cliente Web do Google (valor público) para o app iniciar o login
@@ -798,7 +813,7 @@ function perfilAtualizar()
     $mudarTelefone = array_key_exists("telefone_usuario", $dados);
     $telefone = null;
     if ($mudarTelefone) {
-        $telefone = perfilNormalizarTelefone((string) $dados["telefone_usuario"]);
+        $telefone = telefoneSomenteDigitos((string) $dados["telefone_usuario"]);
         if ($telefone === null) {
             perfilResponder(400, ["success" => false, "message" => "Informe o telefone com DDD, por exemplo (11) 91234-5678."]);
         }
@@ -819,35 +834,8 @@ function perfilAtualizar()
     }
 
     $usuario = perfilBuscarUsuario($conexao, $id);
-    $usuario["email_verificado_usuario"] = perfilVerdadeiro($usuario["email_verificado_usuario"] ?? false);
-    $usuario["google_vinculado"] = perfilGoogleVinculado($conexao, $id);
 
-    perfilResponder(200, ["success" => true, "message" => "Dados atualizados.", "user" => $usuario]);
-}
-
-// "" (apagar) ou telefone BR com DDD no formato (11) 91234-5678; null se for inválido
-function perfilNormalizarTelefone(string $valor): ?string
-{
-    $digitos = preg_replace("/\D+/", "", $valor);
-
-    if ($digitos === "") {
-        return "";
-    }
-
-    // aceita o código do país (+55)
-    if (strlen($digitos) > 11 && strpos($digitos, "55") === 0) {
-        $digitos = substr($digitos, 2);
-    }
-
-    if (strlen($digitos) === 11) {
-        return sprintf("(%s) %s-%s", substr($digitos, 0, 2), substr($digitos, 2, 5), substr($digitos, 7));
-    }
-
-    if (strlen($digitos) === 10) {
-        return sprintf("(%s) %s-%s", substr($digitos, 0, 2), substr($digitos, 2, 4), substr($digitos, 6));
-    }
-
-    return null;
+    perfilResponder(200, ["success" => true, "message" => "Dados atualizados.", "user" => perfilParaResposta($conexao, $usuario, $id)]);
 }
 
 // POST /perfil/foto   (multipart/form-data, campo "foto")

@@ -696,8 +696,41 @@ function executarAutomacoesCron(PDO $conexao)
     return [
         "sucesso" => ($cotacoes["erros"] === 0 && $aportes["erros"] === 0),
         "cotacoes" => $cotacoes,
-        "aportes_recorrentes" => $aportes
+        "aportes_recorrentes" => $aportes,
+        "metas" => verificarMetasCron($conexao)
     ];
+}
+
+// Passo 3: com os fechamentos do dia gravados, avisa quem bateu a meta de alguma carteira.
+// Não entra no "sucesso" da rodada: um aviso que falhar não pode deixar o workflow vermelho.
+function verificarMetasCron(PDO $conexao)
+{
+    require_once __DIR__ . "/../Services/PatrimonioService.php";
+    require_once __DIR__ . "/../Services/NotificacaoService.php";
+
+    $resultado = ["usuarios" => 0, "erros" => 0];
+
+    try {
+        $usuarios = $conexao->query(
+            "SELECT DISTINCT id_usuario FROM carteira WHERE meta_carteira > 0 AND meta_atingida_em IS NULL"
+        )->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $erro) {
+        error_log("Metas não verificadas: " . $erro->getMessage());
+        return $resultado + ["mensagem" => "Migração de metas ainda não aplicada."];
+    }
+
+    foreach ($usuarios as $idUsuario) {
+        try {
+            $patrimonio = montarPatrimonioUsuario($conexao, (int) $idUsuario, ["cotacao_ao_vivo" => false]);
+            verificarMetasAlcancadas($conexao, (int) $idUsuario, $patrimonio["carteiras"]);
+            $resultado["usuarios"]++;
+        } catch (Throwable $erro) {
+            $resultado["erros"]++;
+            error_log("Falha ao verificar metas do usuário $idUsuario: " . $erro->getMessage());
+        }
+    }
+
+    return $resultado;
 }
 
 function executarAutomacoes()

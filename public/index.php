@@ -41,6 +41,14 @@ switch (true) {
         require __DIR__ . '/../routes/cursos.php';
         break;
 
+    case $partes[0] === 'notificacoes':
+        require __DIR__ . '/../routes/notificacoes.php';
+        break;
+
+    case $partes[0] === 'noticias':
+        require __DIR__ . '/../routes/noticias.php';
+        break;
+
     default:
 
         http_response_code(404);
