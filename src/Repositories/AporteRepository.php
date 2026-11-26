@@ -381,6 +381,8 @@ function listarAportesDestaque(PDO $conexao, $idUsuario, $Choise)
         JOIN Ativo atv  ON atv.id_ativo = ii.id_ativo
         LEFT JOIN variacao v ON v.id_ativo = ii.id_ativo
         WHERE c.id_usuario = ?
+          AND c.deleted_at IS NULL
+          AND ii.quantidade_item > 0
         GROUP BY atv.id_ativo, atv.simbolo_ativo, atv.nome_ativo, atv.categoria_ativo, v.variacao
     ";
 
