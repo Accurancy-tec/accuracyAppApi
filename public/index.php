@@ -50,7 +50,7 @@ switch (true) {
         break;
 
     case $partes[0] === 'relatorios':
-        require __DIR__ . '/../routes/relatorios.php';
+        require __DIR__ . '/../routes/reports.php';
         break;
 
     default:
