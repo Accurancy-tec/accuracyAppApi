@@ -11,10 +11,6 @@ function carteiraPertenceAoUsuarioService(PDO $conexao, $idCarteira, $idUsuario)
     return carteiraPertenceAoUsuario($conexao, $idCarteira, $idUsuario);
 }
 
-function deletarCarteiraService(PDO $conexao, $id_usuario, $id_carteira){
-    return deletarCarteira($conexao, $id_usuario, $id_carteira);
-}
-
 function adicionarSaldoService(PDO $conexao, $id_usuario, $valor){
     return adicionarSaldoRepository($conexao, $id_usuario, $valor);
 }

@@ -27,6 +27,7 @@ function buscarCarteirasDetalhadas(PDO $conexao, int $idUsuario, ?int $idCarteir
         FROM carteira c
         LEFT JOIN aporte a ON a.id_carteira = c.id_carteira
         WHERE c.id_usuario = :usuario
+          AND c.deleted_at IS NULL
     ";
 
     $parametros = [":usuario" => $idUsuario];
@@ -69,6 +70,7 @@ function buscarPosicoesAbertas(PDO $conexao, int $idUsuario, ?int $idCarteira = 
             LIMIT 1
         ) cot ON TRUE
         WHERE c.id_usuario = :usuario
+          AND c.deleted_at IS NULL
           AND ii.quantidade_item > 0
     ";
 
@@ -100,6 +102,7 @@ function buscarOperacoesCronologicas(PDO $conexao, int $idUsuario, ?int $idCarte
         FROM aporte ap
         INNER JOIN carteira c ON c.id_carteira = ap.id_carteira
         WHERE c.id_usuario = :usuario
+          AND c.deleted_at IS NULL
           AND ap.status_aporte = 'Concluída'
     ";
 
@@ -138,6 +141,7 @@ function buscarAplicacoesRendaFixa(PDO $conexao, int $idUsuario, ?int $idCarteir
         INNER JOIN carteira c ON c.id_carteira = ap.id_carteira
         INNER JOIN fixed_income_contribution_details fi ON fi.contribution_id = ap.id_aporte
         WHERE c.id_usuario = :usuario
+          AND c.deleted_at IS NULL
           AND ap.tipo_aporte = 'Compra'
           AND ap.status_aporte = 'Concluída'
     ";

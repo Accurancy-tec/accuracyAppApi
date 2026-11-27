@@ -50,6 +50,7 @@ function listarHistoricoAportesUsuario(PDO $conexao, $idUsuario, array $filtros 
             a.id_carteira,
             c.nome_carteira,
             c.tipo_carteira::text AS tipo_carteira,
+            c.deleted_at IS NOT NULL AS carteira_excluida,
             ati.simbolo_ativo AS ativo_aporte,
             ati.nome_ativo AS name_ativo,
             ati.categoria_ativo,

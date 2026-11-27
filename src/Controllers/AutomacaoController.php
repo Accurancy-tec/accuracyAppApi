@@ -712,7 +712,7 @@ function verificarMetasCron(PDO $conexao)
 
     try {
         $usuarios = $conexao->query(
-            "SELECT DISTINCT id_usuario FROM carteira WHERE meta_carteira > 0 AND meta_atingida_em IS NULL"
+            "SELECT DISTINCT id_usuario FROM carteira WHERE meta_carteira > 0 AND meta_atingida_em IS NULL AND deleted_at IS NULL"
         )->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $erro) {
         error_log("Metas não verificadas: " . $erro->getMessage());

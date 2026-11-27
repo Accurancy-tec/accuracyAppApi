@@ -8,6 +8,7 @@ require_once __DIR__ . "/../Services/CarteiraService.php";
 require_once __DIR__ . "/../Services/PosicaoService.php";
 require_once __DIR__ . "/../Services/PatrimonioService.php";
 require_once __DIR__ . "/../Services/NotificacaoService.php";
+require_once __DIR__ . "/../Services/WalletService.php";
 
 const TIPOS_CARTEIRA = ["Real", "Simulada"];
 const ESTILOS_CARTEIRA = ["Renda Fixa", "Renda Variavel", "Cripto", "Internacional", "Mista"];
@@ -252,6 +253,7 @@ function buscarPosicaoAtivoUsuario(): void
             INNER JOIN ativo a
                 ON a.id_ativo = ii.id_ativo
             WHERE c.id_usuario = :id_usuario
+              AND c.deleted_at IS NULL
               AND UPPER(a.simbolo_ativo) = :symbol
               AND ii.quantidade_item > 0
         ");
@@ -274,6 +276,7 @@ function buscarPosicaoAtivoUsuario(): void
               JOIN item_investimento ii ON ii.id_carteira = c.id_carteira
               JOIN ativo a ON a.id_ativo = ii.id_ativo
              WHERE c.id_usuario = :id_usuario
+              AND c.deleted_at IS NULL
                AND UPPER(a.simbolo_ativo) = :symbol
                AND ii.quantidade_item > 0
              ORDER BY c.tipo_carteira, c.nome_carteira
@@ -310,41 +313,80 @@ function buscarPosicaoAtivoUsuario(): void
 // POST /carteiras/excluir-carteira?id_carteira=
 // Simulada: pode ser excluída a qualquer momento (o dinheiro dela é fictício e próprio).
 // Real: só sem ativos em aberto, para que nenhum valor investido desapareça do patrimônio.
+// POST /carteiras/excluir-carteira?id_carteira=N
+// Sells the open positions at the current price and hides the wallet; the history keeps its operations.
 function excluirCarteira(): void
 {
     global $conexao;
-    $idUsuario = (int) autenticar();
+    $userId = (int) autenticar();
+    $walletId = filter_var($_GET['id_carteira'] ?? null, FILTER_VALIDATE_INT);
 
-    $idCarteira = filter_var($_GET['id_carteira'] ?? null, FILTER_VALIDATE_INT);
-
-    if (!$idCarteira) {
+    if (!$walletId) {
         responderCarteira(400, ['success' => false, 'message' => "ID da carteira não fornecido"]);
         return;
     }
 
-    try {
-        $carteira = buscarCarteiraDoUsuario($conexao, $idCarteira, $idUsuario);
+    $wallet = buscarCarteiraDoUsuario($conexao, $walletId, $userId);
+    if (!$wallet) {
+        responderCarteira(404, ['success' => false, 'message' => "Carteira não encontrada"]);
+        return;
+    }
 
-        if (!$carteira) {
+    try {
+        $result = deleteWalletSellingPositions($conexao, $userId, $walletId);
+    } catch (WalletDeletionBlockedException $error) {
+        responderCarteira(409, ['success' => false, 'message' => $error->getMessage()]);
+        return;
+    } catch (Throwable $error) {
+        error_log("Wallet deletion failed: " . $error->getMessage());
+        responderCarteira(500, ['success' => false, 'message' => "Não foi possível excluir a carteira agora."]);
+        return;
+    }
+
+    responderCarteira(200, [
+        'success' => true,
+        'message' => walletDeletedMessage($wallet['tipo_carteira'] === 'Simulada', $result),
+        'ativos_vendidos' => $result['sold'],
+        'valor_vendas' => $result['amount'],
+    ]);
+}
+
+// POST /carteiras/renomear-carteira  body: id_carteira, nome_carteira
+function renameWalletController(): void
+{
+    global $conexao;
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        responderCarteira(405, ['success' => false, 'message' => "Método não permitido. Use POST."]);
+        return;
+    }
+
+    $userId = (int) autenticar();
+    $body = lerCorpoJson();
+    $walletId = filter_var($body['id_carteira'] ?? null, FILTER_VALIDATE_INT);
+    $name = normalizeWalletName((string) ($body['nome_carteira'] ?? ''));
+
+    if (!$walletId) {
+        responderCarteira(400, ['success' => false, 'message' => "ID da carteira não fornecido"]);
+        return;
+    }
+    if (!isValidWalletName($name)) {
+        responderCarteira(400, ['success' => false, 'message' => "Dê um nome de até " . WALLET_NAME_MAX_LENGTH . " caracteres para a carteira."]);
+        return;
+    }
+
+    try {
+        if (!renameWallet($conexao, $userId, $walletId, $name)) {
             responderCarteira(404, ['success' => false, 'message' => "Carteira não encontrada"]);
             return;
         }
-
-        if ($carteira['tipo_carteira'] === 'Real' && contarPosicoesAbertas($conexao, $idCarteira) > 0) {
-            responderCarteira(409, [
-                'success' => false,
-                'message' => "Venda os ativos desta carteira antes de excluí-la."
-            ]);
-            return;
-        }
-
-        deletarCarteiraService($conexao, $idUsuario, $idCarteira);
-
-        responderCarteira(200, ['success' => true, 'message' => "Carteira excluída com sucesso"]);
     } catch (Throwable $error) {
-        error_log("Erro ao excluir carteira: " . $error->getMessage());
-        responderCarteira(500, ['success' => false, 'message' => "Não foi possível excluir a carteira agora."]);
+        error_log("Wallet rename failed: " . $error->getMessage());
+        responderCarteira(500, ['success' => false, 'message' => "Não foi possível renomear a carteira agora."]);
+        return;
     }
+
+    responderCarteira(200, ['success' => true, 'message' => "Nome da carteira atualizado", 'nome_carteira' => $name]);
 }
 
 // GET /carteiras/saldo

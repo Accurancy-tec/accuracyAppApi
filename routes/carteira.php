@@ -34,6 +34,10 @@ switch ($acao) {
         excluirCarteira();
         break;
 
+    case 'renomear-carteira':
+        renameWalletController();
+        break;
+
     case 'posicao-ativo':
         buscarPosicaoAtivoUsuario();
         break;
