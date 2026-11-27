@@ -219,28 +219,7 @@ function noticiasExternas(): array
     return $noticias;
 }
 
-/** Converte uma linha da tabela noticia (publicada por um administrador) no formato da API. */
-function noticiaDaEquipe(array $linha): array
-{
-    $conteudo = trim((string) $linha["conteudo_noticia"]);
-    $resumo = trim((string) ($linha["resumo_noticia"] ?? ""));
-    $data = strtotime((string) $linha["publicada_em"]);
-
-    return [
-        "id" => "eq-" . (int) $linha["id_noticia"],
-        "titulo" => $linha["titulo_noticia"],
-        "resumo" => $resumo !== "" ? $resumo : noticiaTextoLimpo($conteudo, 220),
-        "conteudo" => $conteudo,
-        "fonte" => "Equipe Accuracy",
-        "url" => null,
-        "imagem" => null,
-        "categoria" => $linha["categoria_noticia"],
-        "origem" => "equipe",
-        "publicada_em" => $data ? gmdate("Y-m-d\TH:i:s\Z", $data) : null,
-    ];
-}
-
-/** Junta as notícias da equipe com as dos portais: mais recentes primeiro, sem títulos repetidos. */
+/** Joins news lists: most recent first, without repeated titles. */
 function combinarNoticias(array $internas, array $externas, int $limite): array
 {
     $todas = array_merge($internas, $externas);

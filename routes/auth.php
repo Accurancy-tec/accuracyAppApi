@@ -133,22 +133,6 @@ switch ($acao) {
         adminDeletarUsuario();
         break;
 
-    case 'adminCategoriasNoticia':
-        adminCategoriasNoticia();
-        break;
-
-    case 'adminListarNoticias':
-        adminListarNoticias();
-        break;
-
-    case 'adminCriarNoticia':
-        adminCriarNoticia();
-        break;
-
-    case 'adminExcluirNoticia':
-        adminExcluirNoticia();
-        break;
-
     case 'adminListarAdmins':
         adminListarAdmins();
         break;
