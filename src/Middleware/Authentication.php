@@ -43,8 +43,8 @@ function autenticar()
         // Tokens com "sid" pertencem a uma sessão: se o usuário desconectou esse aparelho,
         // o token deixa de valer na hora (sem esperar os 15 minutos de validade).
         $idSessao = isset($decoded->sid) ? (int) $decoded->sid : null;
-        $GLOBALS["sessao_atual"] = $idSessao;
-        if ($idSessao && !sessaoDoTokenAtiva($idSessao, (int) $decoded->sub)) {
+        $GLOBALS["current_session_id"] = $idSessao;
+        if ($idSessao && !isTokenSessionActive($idSessao, (int) $decoded->sub)) {
             http_response_code(401);
             echo json_encode([
                 "erro" => "Sessão encerrada neste aparelho. Entre de novo.",
@@ -71,15 +71,15 @@ function autenticar()
  * Confere a sessão do token. Se o banco falhar, não derruba o usuário: o token continua
  * valendo até expirar (15 minutos), como antes desta conferência existir.
  */
-function sessaoDoTokenAtiva(int $idSessao, int $idUsuario): bool
+function isTokenSessionActive(int $idSessao, int $idUsuario): bool
 {
     $conexao = $GLOBALS["conexao"] ?? null;
     if (!$conexao instanceof PDO) {
         return true;
     }
-    require_once __DIR__ . "/../Services/SessaoService.php";
+    require_once __DIR__ . "/../Services/SessionService.php";
     try {
-        return sessaoAtiva($conexao, $idSessao, $idUsuario);
+        return isSessionActive($conexao, $idSessao, $idUsuario);
     } catch (Throwable $erro) {
         error_log("Falha ao conferir a sessão $idSessao: " . $erro->getMessage());
         return true;
