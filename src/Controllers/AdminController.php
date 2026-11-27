@@ -12,6 +12,7 @@
  */
 
 require_once __DIR__ . "/AuthController.php";   // carrega conexão, JWT e loginSite()
+require_once __DIR__ . "/../Services/CourseTrailService.php";
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -581,7 +582,8 @@ function adminCriarCurso()
             "INSERT INTO curso (titulo_curso, descricao_curso, categoria_curso, nivel_curso,
                                 duracao_minutos_curso, url_video_curso, url_thumb_curso, id_administrador)
              VALUES (:titulo, :descricao, CAST(:cat AS \"$tCat\"), CAST(:niv AS \"$tNiv\"),
-                     :duracao, :video, :thumb, :adm)"
+                     :duracao, :video, :thumb, :adm)
+             RETURNING id_curso"
         );
         $st->bindValue(":titulo", $v["titulo"]);
         $st->bindValue(":descricao", $v["descricao"]);
@@ -592,11 +594,19 @@ function adminCriarCurso()
         $st->bindValue(":thumb", $v["thumb"]);
         $st->bindValue(":adm", (int) $admin["id_administrador"], PDO::PARAM_INT);
         $st->execute();
+        $courseId = (int) $st->fetchColumn();
     } catch (PDOException $e) {
         adminResponder(400, ["success" => false, "message" => "Não foi possível salvar o curso (confira os campos)."]);
     }
 
-    adminResponder(201, ["success" => true, "message" => "Curso cadastrado."]);
+    try {
+        placeCourseInCategoryTrail($conexao, $courseId);
+    } catch (PDOException $e) {
+        error_log("Course $courseId was not added to its trail: " . $e->getMessage());
+        adminResponder(201, ["success" => true, "message" => "Curso cadastrado, mas não foi possível colocá-lo na trilha da categoria."]);
+    }
+
+    adminResponder(201, ["success" => true, "message" => "Curso cadastrado no fim da trilha " . $v["categoria"] . "."]);
 }
 
 // POST /auth/adminAlterarCurso   corpo: id_curso + campos opcionais
@@ -614,6 +624,10 @@ function adminAlterarCurso()
     $v = adminCursoValidar($d, false);
     $tCat = adminTipoEnum("curso", "categoria_curso");
     $tNiv = adminTipoEnum("curso", "nivel_curso");
+
+    $previous = $conexao->prepare("SELECT categoria_curso::text FROM curso WHERE id_curso = :id");
+    $previous->execute([":id" => $id]);
+    $previousCategory = $previous->fetchColumn();
 
     try {
         $st = $conexao->prepare(
@@ -643,6 +657,16 @@ function adminAlterarCurso()
     if ($st->rowCount() === 0) {
         adminResponder(404, ["success" => false, "message" => "Curso não encontrado."]);
     }
+
+    if ($v["categoria"] !== null && $v["categoria"] !== $previousCategory) {
+        try {
+            placeCourseInCategoryTrail($conexao, $id);
+        } catch (PDOException $e) {
+            error_log("Course $id was not moved to its trail: " . $e->getMessage());
+            adminResponder(200, ["success" => true, "message" => "Curso atualizado, mas não foi possível movê-lo para a trilha da nova categoria."]);
+        }
+        adminResponder(200, ["success" => true, "message" => "Curso atualizado e movido para a trilha " . $v["categoria"] . "."]);
+    }
     adminResponder(200, ["success" => true, "message" => "Curso atualizado."]);
 }
 
@@ -655,12 +679,16 @@ function adminExcluirCurso()
     $id = (int) (adminEntrada()["id_curso"] ?? 0);
 
     try {
+        $conexao->beginTransaction();
+        removeCourseFromTrails($conexao, $id);
         $st = $conexao->prepare("DELETE FROM curso WHERE id_curso = :id");
         $st->execute([":id" => $id]);
+        $conexao->commit();
     } catch (PDOException $e) {
-        if ($e->getCode() === "23503") {
-            adminResponder(409, ["success" => false, "message" => "Este curso faz parte de uma trilha. Remova-o da trilha antes de excluir."]);
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
         }
+        error_log("Course $id was not deleted: " . $e->getMessage());
         adminResponder(500, ["success" => false, "message" => "Não foi possível excluir o curso."]);
     }
 
