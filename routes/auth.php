@@ -6,6 +6,7 @@ require_once __DIR__ . '/../src/Controllers/AdminController.php';
 require_once __DIR__ . '/../src/Controllers/TermsController.php';
 require_once __DIR__ . '/../src/Controllers/SessionController.php';
 require_once __DIR__ . '/../src/Controllers/PasswordRecoveryController.php';
+require_once __DIR__ . '/../src/Controllers/AdminQuizController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -142,6 +143,18 @@ switch ($acao) {
         break;
     case 'adminOpcoesCurso':
         adminOpcoesCurso();
+        break;
+
+    case 'adminListarQuiz':
+        adminListQuizController();
+        break;
+
+    case 'adminCriarQuiz':
+        adminCreateQuizController();
+        break;
+
+    case 'adminExcluirQuiz':
+        adminDeleteQuizController();
         break;
 
     case 'adminListarCursos':
