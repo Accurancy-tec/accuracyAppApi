@@ -11,6 +11,12 @@ if (in_array($acao, ['atividades', 'progresso', 'salvar-progresso'], true)) {
     return;
 }
 
+if ($acao === 'quiz' || $acao === 'responder-quiz') {
+    require_once __DIR__ . '/../src/Controllers/QuizController.php';
+    $acao === 'quiz' ? quizQuestionsController() : answerQuizController();
+    return;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     http_response_code(405);
 
