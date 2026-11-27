@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../src/Controllers/AuthController.php';
 require_once __DIR__ . '/OAUTH.php'; // define loginGoogle() e loginLinkedin()
 require_once __DIR__ . '/../src/Controllers/AdminController.php';
+require_once __DIR__ . '/../src/Controllers/TermsController.php';
 
 $acao = $partes[1] ?? null;
 
@@ -60,6 +61,14 @@ switch ($acao) {
         break;
     case 'sair':
         sairDaConta();
+        break;
+
+    case 'termos':
+        termsStatusController();
+        break;
+
+    case 'aceitar-termos':
+        acceptTermsController();
         break;
 
     case 'verify-email':
