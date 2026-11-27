@@ -9,7 +9,7 @@ function buscarTrilhas(PDO $conexao)
             ordem_trilha,
             playlist_youtube_trilha,
             descricao_trilha,
-            total_videos_trilha
+            (SELECT COUNT(*) FROM atividade a WHERE a.id_trilha = trilha.id_trilha) AS total_videos_trilha
         FROM trilha
         ORDER BY ordem_trilha, id_trilha
     ";
@@ -30,7 +30,7 @@ function buscarTrilhaPorId(PDO $conexao, $idTrilha)
             ordem_trilha,
             playlist_youtube_trilha,
             descricao_trilha,
-            total_videos_trilha
+            (SELECT COUNT(*) FROM atividade a WHERE a.id_trilha = trilha.id_trilha) AS total_videos_trilha
         FROM trilha
         WHERE id_trilha = ?
     ";
